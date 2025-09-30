@@ -19,6 +19,32 @@ $recent_users_sql = "SELECT username, first_name, last_name, created_at
                      ORDER BY created_at DESC
                      LIMIT 5";
 $recent_users_result = $conn->query($recent_users_sql);
+// Notifications: recent student payments
+$notifications = [];
+$notif_count = 0;
+$notif_sql = "SELECT p.id, p.amount, p.status, p.created_at, u.first_name, u.last_name, u.username
+              FROM payments p
+              JOIN users u ON u.id = p.user_id
+              WHERE u.user_type = 'student'
+              ORDER BY p.created_at DESC
+              LIMIT 10";
+$notif_res = $conn->query($notif_sql);
+if ($notif_res) {
+    while ($row = $notif_res->fetch_assoc()) { $notifications[] = $row; }
+}
+// Unread count since last seen timestamp stored in session
+if (!isset($_SESSION['notifications_last_seen'])) {
+    $_SESSION['notifications_last_seen'] = '1970-01-01 00:00:00';
+}
+$last_seen = $_SESSION['notifications_last_seen'];
+$count_stmt = $conn->prepare("SELECT COUNT(*) AS cnt FROM payments p JOIN users u ON u.id = p.user_id WHERE u.user_type='student' AND p.created_at > ?");
+if ($count_stmt) {
+    $count_stmt->bind_param('s', $last_seen);
+    $count_stmt->execute();
+    $count_res = $count_stmt->get_result();
+    if ($count_res && ($c = $count_res->fetch_assoc())) { $notif_count = (int)$c['cnt']; }
+    $count_stmt->close();
+}
 ?>
 
 <!DOCTYPE html>
@@ -30,6 +56,7 @@ $recent_users_result = $conn->query($recent_users_sql);
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="../public/theme.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script defer src="../public/ui.js"></script>
     <style>
 /* Reset and base styles */
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -234,6 +261,48 @@ body {
     background: #e2e8f0;
     color: #1e293b;
 }
+
+/* Notifications */
+.notification-wrapper {
+    position: relative;
+}
+.notification-icon { position: relative; }
+.notif-badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    background: #ef4444;
+    color: #fff;
+    border-radius: 9999px;
+    padding: 2px 6px;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+}
+.notif-dropdown {
+    position: absolute;
+    right: 0;
+    top: 48px;
+    width: 360px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    box-shadow: 0 10px 20px rgba(0,0,0,0.08);
+    padding: 12px 0;
+    display: none;
+    z-index: 1000;
+}
+.notif-dropdown.open { display: block; }
+.notif-header { padding: 10px 16px; font-weight: 700; color: #1e293b; border-bottom: 1px solid #f1f5f9; }
+.notif-empty { padding: 14px 16px; color: #64748b; font-size: 14px; }
+.notif-list { max-height: 360px; overflow-y: auto; }
+.notif-item { display: flex; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #f8fafc; }
+.notif-item:last-child { border-bottom: none; }
+.notif-avatar { width: 36px; height: 36px; border-radius: 8px; background: #fff3e8; display:flex; align-items:center; justify-content:center; color:#ff6a00; font-weight:700; }
+.notif-content { flex: 1; }
+.notif-title { font-weight: 600; color: #1e293b; font-size: 14px; margin-bottom: 2px; }
+.notif-sub { color: #64748b; font-size: 12px; }
+.notif-amount { color: #10b981; font-weight: 700; }
 
 /* Stats grid */
 .stats-overview {
@@ -507,8 +576,45 @@ body {
                     <p>Manage your institution's payment system</p>
                 </div>
                 <div class="header-right">
-                    <div class="notification-icon">
-                        <i class="fas fa-bell"></i>
+                    <div class="notification-wrapper">
+                        <div class="notification-icon" id="notifBell" role="button" aria-label="Notifications">
+                            <i class="fas fa-bell"></i>
+                            <?php if ($notif_count > 0): ?>
+                                <span class="notif-badge" id="notifBadge"><?php echo $notif_count; ?></span>
+                            <?php else: ?>
+                                <span class="notif-badge" id="notifBadge" style="display:none;">0</span>
+                            <?php endif; ?>
+                        </div>
+                        <div class="notif-dropdown" id="notifDropdown">
+                            <div class="notif-header" style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                                <span>Recent Payments</span>
+                                <div style="display:flex; gap:8px;">
+                                    <button id="notifRefresh" class="logout-btn" style="padding:6px 10px; font-size:12px;">Refresh</button>
+                                    <button id="notifClear" class="logout-btn" style="padding:6px 10px; font-size:12px;">Mark all read</button>
+                                </div>
+                            </div>
+                            <?php if (!empty($notifications)): ?>
+                                <div class="notif-list">
+                                    <?php foreach ($notifications as $n): ?>
+                                        <div class="notif-item">
+                                            <div class="notif-avatar"><i class="fas fa-receipt"></i></div>
+                                            <div class="notif-content">
+                                                <div class="notif-title">
+                                                    Payment of <span class="notif-amount">₹<?php echo number_format((float)$n['amount'], 2); ?></span>
+                                                    by <?php echo htmlspecialchars(trim(($n['first_name'] ?? '') . ' ' . ($n['last_name'] ?? '')) ?: $n['username']); ?>
+                                                </div>
+                                                <div class="notif-sub"><?php echo htmlspecialchars(ucfirst($n['status'])); ?> · <?php echo date('M d, Y H:i', strtotime($n['created_at'])); ?></div>
+                                            </div>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php else: ?>
+                                <div class="notif-empty">No recent payments.</div>
+                            <?php endif; ?>
+                            <div style="padding:10px 16px; border-top:1px solid #f1f5f9; text-align:right;">
+                                <a href="payment_reports.php" style="text-decoration:none; font-weight:600; color:#ff6a00;">View all</a>
+                            </div>
+                        </div>
                     </div>
                     <div class="user-profile">
                         <div class="user-avatar">ZA</div>
@@ -604,13 +710,7 @@ body {
                     <div class="card-description">Configure fee structures and manage payment deadlines</div>
                 </a>
 
-                <a href="system_settings.php" class="management-card">
-                    <div class="card-icon">
-                        <i class="fas fa-cog"></i>
-                    </div>
-                    <div class="card-title">System Settings</div>
-                    <div class="card-description">Configure system preferences and security settings</div>
-                </a>
+                
             </div>
             </div>
 
@@ -656,6 +756,90 @@ body {
         </main>
     </div>
 
+    <script>
+    (function(){
+        const bell = document.getElementById('notifBell');
+        const dropdown = document.getElementById('notifDropdown');
+        const badge = document.getElementById('notifBadge');
+        const btnClear = document.getElementById('notifClear');
+        const btnRefresh = document.getElementById('notifRefresh');
+        if (!bell || !dropdown) return;
+        bell.addEventListener('click', function(e){
+            e.stopPropagation();
+            dropdown.classList.toggle('open');
+        });
+        document.addEventListener('click', function(){
+            if (dropdown.classList.contains('open')) {
+                dropdown.classList.remove('open');
+            }
+        });
+        dropdown.addEventListener('click', function(e){ e.stopPropagation(); });
+
+        function updateBadge(count){
+            if (!badge) return;
+            if (count > 0) {
+                badge.textContent = count;
+                badge.style.display = 'inline-block';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+
+        async function fetchCount(){
+            try {
+                const res = await fetch('notifications.php?action=count');
+                const data = await res.json();
+                if (data && data.success) updateBadge(data.unread || 0);
+            } catch(e) {}
+        }
+
+        async function markAllRead(){
+            try {
+                await fetch('notifications.php?action=mark_all_read');
+                updateBadge(0);
+            } catch(e) {}
+        }
+
+        async function refreshList(){
+            try {
+                const res = await fetch('notifications.php?action=list');
+                const data = await res.json();
+                if (!data || !data.success) return;
+                const list = dropdown.querySelector('.notif-list');
+                const emptyEl = dropdown.querySelector('.notif-empty');
+                if (list) {
+                    list.innerHTML = '';
+                    if ((data.notifications||[]).length === 0) {
+                        if (!emptyEl) {
+                            list.insertAdjacentHTML('beforebegin', '<div class="notif-empty">No recent payments.</div>');
+                        }
+                    } else {
+                        if (emptyEl) emptyEl.remove();
+                        (data.notifications||[]).forEach(function(n){
+                            const name = ((n.first_name||'') + ' ' + (n.last_name||'')).trim() || n.username;
+                            const amount = Number(n.amount).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+                            const item = document.createElement('div');
+                            item.className = 'notif-item';
+                            item.innerHTML = '<div class="notif-avatar"><i class="fas fa-receipt"></i></div>'+
+                                '<div class="notif-content">'+
+                                '<div class="notif-title">Payment of <span class="notif-amount">₹'+amount+'</span> by '+name+'</div>'+ 
+                                '<div class="notif-sub">'+(n.status? (n.status.charAt(0).toUpperCase()+n.status.slice(1)):'')+' · '+ new Date(n.created_at.replace(' ', 'T')).toLocaleString() +'</div>'+ 
+                                '</div>';
+                            list.appendChild(item);
+                        });
+                    }
+                }
+                updateBadge(data.unread || 0);
+            } catch(e) {}
+        }
+
+        if (btnClear) btnClear.addEventListener('click', function(e){ e.preventDefault(); markAllRead(); });
+        if (btnRefresh) btnRefresh.addEventListener('click', function(e){ e.preventDefault(); refreshList(); });
+        // initial fetch and periodic refresh
+        fetchCount();
+        setInterval(fetchCount, 60000);
+    })();
+    </script>
 
 </body>
 </html>

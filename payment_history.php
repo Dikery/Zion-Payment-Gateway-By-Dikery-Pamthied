@@ -14,6 +14,7 @@ if (!isset($_SESSION['username'])) {
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link href="public/theme.css" rel="stylesheet">
+  <script defer src="public/ui.js"></script>
   <style>
     * {
       margin: 0;

@@ -10,6 +10,33 @@ require '../includes/db_connect.php';
 $messages = $_SESSION['messages'] ?? [];
 unset($_SESSION['messages']);
 
+// AJAX handlers for edit panel
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && (isset($_POST['ajax']) && $_POST['ajax'] === '1')) {
+    header('Content-Type: application/json');
+    $action = $_POST['action'];
+    if ($action === 'get_course') {
+        $course_id = (int)($_POST['course_id'] ?? 0);
+        $stmt = $conn->prepare("SELECT id, name, code, num_semesters, is_active FROM courses WHERE id = ?");
+        if ($stmt) { $stmt->bind_param('i', $course_id); $stmt->execute(); $res = $stmt->get_result(); $row = $res->fetch_assoc(); $stmt->close(); }
+        echo json_encode(['success' => (bool)$row, 'course' => $row]);
+        exit();
+    }
+    if ($action === 'update_course') {
+        $course_id = (int)($_POST['course_id'] ?? 0);
+        $name = trim($_POST['course_name'] ?? '');
+        $code = trim($_POST['course_code'] ?? '');
+        $num_semesters = (int)($_POST['num_semesters'] ?? 0);
+        if ($course_id > 0 && $name !== '' && $num_semesters > 0) {
+            $stmt = $conn->prepare("UPDATE courses SET name = ?, code = ?, num_semesters = ? WHERE id = ?");
+            if ($stmt) { $stmt->bind_param('ssii', $name, $code, $num_semesters, $course_id); $ok = $stmt->execute(); $stmt->close(); }
+            echo json_encode(['success' => isset($ok) && $ok]);
+        } else {
+            echo json_encode(['success' => false, 'message' => 'Invalid input']);
+        }
+        exit();
+    }
+}
+
 // Handle add/update/delete course
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
@@ -69,6 +96,7 @@ if ($res) { while ($r = $res->fetch_assoc()) { $courses[] = $r; } }
     <title>Courses - Admin</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="../public/theme.css" rel="stylesheet">
+    <script defer src="../public/ui.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -115,6 +143,23 @@ body { font-family: 'Inter', sans-serif; background: #f8fafc; color: #1e293b; li
 .table td { padding: 16px; font-size: 14px; color: #374151; }
 .badge { padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
 .badge.active { background: rgba(16, 185, 129, 0.1); color: #10b981; }
+
+/* Edit panel */
+.edit-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.3); display: none; align-items: stretch; justify-content: flex-end; z-index: 2000; }
+.edit-overlay.open { display: flex; }
+.edit-panel { width: 420px; max-width: 90vw; background: #ffffff; height: 100vh; border-left: 1px solid #e2e8f0; box-shadow: -10px 0 20px rgba(0,0,0,0.08); transform: translateX(100%); transition: transform .35s ease; display: flex; flex-direction: column; }
+.edit-overlay.open .edit-panel { transform: translateX(0); }
+.edit-header { padding: 16px 20px; border-bottom: 1px solid #f1f5f9; display:flex; align-items:center; justify-content:space-between; }
+.edit-title { font-weight:700; color:#1e293b; }
+.edit-body { padding: 16px 20px; overflow-y: auto; }
+.form-group { display:flex; flex-direction:column; gap:6px; margin-bottom:12px; }
+.form-group label { font-weight:600; color:#1e293b; font-size:14px; }
+.form-control { padding:10px 12px; border:1px solid #d1d5db; border-radius:8px; font-family:'Inter', sans-serif; font-size:14px; }
+.form-actions { padding: 12px 20px; border-top:1px solid #f1f5f9; display:flex; gap:10px; justify-content:flex-end; }
+.btn { padding: 10px 16px; border-radius:8px; border:1px solid #e2e8f0; background:#f8fafc; color:#374151; cursor:pointer; font-weight:600; }
+.btn.primary { background:#ff6a00; color:#fff; border-color:#ff6a00; }
+.btn.primary:hover { background:#e65e00; }
+.btn.secondary:hover { background:#eef2f7; }
 
 /* Actions */
 .action-buttons { display: flex; gap: 8px; align-items: center; }
@@ -217,33 +262,7 @@ details.edit-panel[open] summary:after { transform: rotate(180deg); }
                                         <td><?php echo $c['is_active'] ? 'Active' : 'Inactive'; ?></td>
                                         <td class="actions-cell">
                                             <div class="_actions-inline">
-                                                <details class="edit-panel">
-                                                    <summary class="btn-small" style="cursor:pointer;">Edit</summary>
-                                                    <div class="edit-content">
-                                                        <form method="POST">
-                                                            <input type="hidden" name="action" value="edit_course" />
-                                                            <input type="hidden" name="course_id" value="<?php echo (int)$c['id']; ?>" />
-                                                            <div class="edit-grid">
-                                                                <div>
-                                                                    <label>Name</label>
-                                                                    <input type="text" name="course_name" value="<?php echo htmlspecialchars($c['name']); ?>" required />
-                                                                </div>
-                                                                <div>
-                                                                    <label>Code</label>
-                                                                    <input type="text" name="course_code" value="<?php echo htmlspecialchars($c['code'] ?? ''); ?>" />
-                                                                </div>
-                                                                <div>
-                                                                    <label>Semesters</label>
-                                                                    <input type="number" min="1" max="12" name="num_semesters" value="<?php echo (int)$c['num_semesters']; ?>" required />
-                                                                </div>
-                                                            </div>
-                                                            <div class="edit-footer">
-                                                                <button type="submit" class="btn-small primary">Save</button>
-                                                                <button type="button" class="btn-small" onclick="this.closest('details').removeAttribute('open')">Close</button>
-                                                            </div>
-                                                        </form>
-                                                    </div>
-                                                </details>
+                                                <button class="btn-small" onclick="openEditCoursePanel(<?php echo (int)$c['id']; ?>)" type="button">Edit</button>
                                                 <form method="POST" onsubmit="return confirm('Delete this course? This cannot be undone.');" style="display:inline;">
                                                     <input type="hidden" name="action" value="delete_course" />
                                                     <input type="hidden" name="course_id" value="<?php echo (int)$c['id']; ?>" />
@@ -262,6 +281,94 @@ details.edit-panel[open] summary:after { transform: rotate(180deg); }
             </div>
         </main>
     </div>
+    <!-- Edit Panel UI -->
+    <div class="edit-overlay" id="editOverlay" aria-hidden="true">
+        <div class="edit-panel" role="dialog" aria-modal="true">
+            <div class="edit-header">
+                <div class="edit-title">Edit Course</div>
+                <button class="btn" id="btnCloseEdit">Close</button>
+            </div>
+            <div class="edit-body">
+                <form id="editForm">
+                    <input type="hidden" name="course_id" id="edit_course_id" />
+                    <div class="form-group">
+                        <label>Course Name</label>
+                        <input type="text" class="form-control" name="course_name" id="edit_course_name" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Course Code</label>
+                        <input type="text" class="form-control" name="course_code" id="edit_course_code" />
+                    </div>
+                    <div class="form-group">
+                        <label>Number of Semesters</label>
+                        <input type="number" min="1" max="12" class="form-control" name="num_semesters" id="edit_num_semesters" required />
+                    </div>
+                </form>
+            </div>
+            <div class="form-actions">
+                <button class="btn secondary" id="btnCancelEdit" type="button">Cancel</button>
+                <button class="btn primary" id="btnSaveEdit" type="button">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    (function(){
+        const overlay = document.getElementById('editOverlay');
+        const btnClose = document.getElementById('btnCloseEdit');
+        const btnCancel = document.getElementById('btnCancelEdit');
+        const btnSave = document.getElementById('btnSaveEdit');
+        const form = document.getElementById('editForm');
+        const fields = {
+            id: document.getElementById('edit_course_id'),
+            name: document.getElementById('edit_course_name'),
+            code: document.getElementById('edit_course_code'),
+            semesters: document.getElementById('edit_num_semesters')
+        };
+
+        window.openEditCoursePanel = async function(courseId){
+            overlay.classList.add('open');
+            overlay.setAttribute('aria-hidden','false');
+            const fd = new FormData();
+            fd.append('action','get_course'); fd.append('ajax','1'); fd.append('course_id', courseId);
+            try {
+                const res = await fetch('courses.php', { method:'POST', body: fd });
+                const data = await res.json();
+                if (data && data.success) {
+                    const c = data.course;
+                    fields.id.value = c.id;
+                    fields.name.value = c.name || '';
+                    fields.code.value = c.code || '';
+                    fields.semesters.value = c.num_semesters || 1;
+                }
+            } catch(e) {}
+        }
+
+        function close(){ overlay.classList.remove('open'); overlay.setAttribute('aria-hidden','true'); }
+        btnClose.addEventListener('click', close); btnCancel.addEventListener('click', close);
+
+        btnSave.addEventListener('click', async function(){
+            const fd = new FormData(form);
+            fd.append('action','update_course'); fd.append('ajax','1');
+            try {
+                const res = await fetch('courses.php', { method:'POST', body: fd });
+                const data = await res.json();
+                if (data && data.success) {
+                    const rowBtn = document.querySelector(`button[onclick="openEditCoursePanel(${fields.id.value})"]`);
+                    const row = rowBtn ? rowBtn.closest('tr') : null;
+                    if (row) {
+                        row.cells[0].textContent = fields.name.value;
+                        row.cells[1].textContent = fields.code.value;
+                        row.cells[2].textContent = fields.semesters.value;
+                    }
+                    close();
+                } else {
+                    alert(data && data.message ? data.message : 'Failed to update course');
+                }
+            } catch(e) { alert('Failed to update course'); }
+        });
+    })();
+    </script>
 </body>
 </html>
 

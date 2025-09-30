@@ -14,8 +14,10 @@ $semester_label = $_SESSION['semester'] ?? null;
 
 // Pull latest totals
 $total_paid = 0.00;
-$outstanding_amount = $_SESSION['outstanding_amount'] ?? 0.00;
+$outstanding_amount = 0.00;
 $due_date_label = '—';
+$days_left_label = '';
+$sum_paid_for_fee = 0.00;
 
 $sql = "SELECT u.total_paid, COALESCE(sd.outstanding_amount, 0) AS outstanding_amount,
                sd.course AS course_name, sd.semester AS semester_label
@@ -38,14 +40,36 @@ if ($stmt) {
 
 // Match fee structure for this student (by course and semester)
 $applicable_fee = null;
-$fee_stmt = $conn->prepare("SELECT amount, due_date FROM fee_structures WHERE course_name = ? AND semester = ? AND is_active = 1");
+$fee_stmt = $conn->prepare("SELECT id, amount, due_date FROM fee_structures WHERE course_name = ? AND semester = ? AND is_active = 1");
 if ($fee_stmt && isset($_SESSION['course']) && isset($_SESSION['semester'])) {
   $fee_stmt->bind_param("ss", $_SESSION['course'], $_SESSION['semester']);
   $fee_stmt->execute();
   $fee_res = $fee_stmt->get_result();
   if ($f = $fee_res->fetch_assoc()) {
     $applicable_fee = $f;
-    if (!empty($f['due_date'])) { $due_date_label = date('M d, Y', strtotime($f['due_date'])); }
+    if (!empty($f['due_date'])) {
+      $due_ts = strtotime($f['due_date']);
+      $due_date_label = date('M d, Y', $due_ts);
+      $days_diff = floor(($due_ts - time()) / 86400);
+      $days_left_label = $days_diff >= 0 ? $days_diff . ' days left' : abs($days_diff) . ' days overdue';
+    }
+
+    // Compute total paid against this fee (completed payments only)
+    $sum_sql = "SELECT COALESCE(SUM(amount), 0) AS sum_paid FROM payments WHERE user_id = ? AND (fee_id = ? OR ? IS NULL) AND (status IN ('completed','success','SUCCESS','Completed'))";
+    $sum_stmt = $conn->prepare($sum_sql);
+    if ($sum_stmt) {
+      $fee_id_param = isset($f['id']) ? (int)$f['id'] : null;
+      $sum_stmt->bind_param("iii", $user_id, $fee_id_param, $fee_id_param);
+      $sum_stmt->execute();
+      $sum_res = $sum_stmt->get_result();
+      if ($srow = $sum_res->fetch_assoc()) { $sum_paid_for_fee = (float)$srow['sum_paid']; }
+      $sum_stmt->close();
+    }
+
+    // Outstanding is fee amount minus sum of successful payments; never below zero
+    if (isset($f['amount'])) {
+      $outstanding_amount = max(0.0, (float)$f['amount'] - $sum_paid_for_fee);
+    }
   }
   $fee_stmt->close();
 }
@@ -77,6 +101,7 @@ if (!empty($recent_payments)) {
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
   <link href="public/theme.css" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script defer src="public/ui.js"></script>
   <style>
     :root {
       --accent: #ff6a00;
@@ -311,11 +336,11 @@ if (!empty($recent_payments)) {
         <div class="stat-icon">
           <i class="fas fa-wallet"></i>
         </div>
-        <div class="stat-value">₹<span id="outstandingAmount"><?php echo number_format(isset($applicable_fee['amount']) ? (float)$applicable_fee['amount'] : (float)$outstanding_amount, 0); ?></span></div>
-        <div class="stat-label">Outstanding Dues (click to view)</div>
+        <div class="stat-value">₹<span id="outstandingAmount"><?php echo number_format((float)$outstanding_amount, 0); ?></span></div>
+        <div class="stat-label"><?php echo $outstanding_amount > 0 ? 'Outstanding Dues (click to view)' : 'All dues cleared'; ?></div>
         <div class="stat-trend up">
           <i class="fas fa-arrow-up"></i>
-          Due soon
+          <?php echo $outstanding_amount > 0 ? 'Due soon' : 'Up to date'; ?>
         </div>
       </div>
 
@@ -337,10 +362,12 @@ if (!empty($recent_payments)) {
         </div>
         <div class="stat-value" id="nextDueDate"><?php echo $due_date_label; ?></div>
         <div class="stat-label">Next Due Date</div>
-        <div class="stat-trend down">
-          <i class="fas fa-clock"></i>
-          18 days left
-        </div>
+        <?php if (!empty($days_left_label)): ?>
+          <div class="stat-trend down">
+            <i class="fas fa-clock"></i>
+            <?php echo htmlspecialchars($days_left_label); ?>
+          </div>
+        <?php endif; ?>
       </div>
     </div>
 

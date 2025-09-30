@@ -78,3 +78,56 @@ html, body { background: var(--bg); color: var(--text); }
 .heading { color: var(--text); font-weight: 700; }
 .subtle { color: var(--muted); }
 
+/* ===== Micro-interactions & Animations ===== */
+:root {
+  --reveal-duration: .6s;
+  --reveal-delay-step: .06s;
+  --tilt-rotate: 2.5deg;
+  --tilt-translate: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+
+@keyframes ui-reveal-up {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.reveal,
+[data-reveal] {
+  opacity: 0;
+  transform: translateY(14px);
+}
+
+.revealed {
+  opacity: 1 !important;
+  transform: translateY(0) !important;
+  animation: ui-reveal-up var(--reveal-duration) ease forwards;
+}
+
+/* Gentle tilt on hover */
+.tilt,
+[data-tilt] {
+  transition: transform .2s ease, box-shadow .2s ease;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+.tilt:hover,
+[data-tilt]:hover {
+  transform: translateY(calc(var(--tilt-translate))) rotateX(var(--tilt-rotate)) rotateY(calc(var(--tilt-rotate) * -1));
+}
+
+/* Subtle focus ring */
+.ui-focus:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(255,106,0,.18);
+}
+
+/* Card hover elevation */
+.card-elevate:hover {
+  box-shadow: 0 8px 20px rgba(0,0,0,.08);
+}
+

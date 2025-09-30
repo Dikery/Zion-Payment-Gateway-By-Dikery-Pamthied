@@ -13,6 +13,7 @@ if (!isset($_SESSION['username'])) {
   <title>Make Payment - Zion Fee Portal</title>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
   <link href="public/theme.css" rel="stylesheet">
+  <script defer src="public/ui.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
     * {
@@ -163,11 +164,11 @@ if (!isset($_SESSION['username'])) {
     .quick-amount-btn:hover { background: var(--accent); color:#fff; transform: translateY(-1px); }
 
     /* Swipe to pay */
-    .swipe-wrap { position: relative; width:100%; height: 54px; border-radius: 14px; background: #eef2ff; border:1px solid #c7d2fe; overflow:hidden; user-select:none; }
-    .swipe-progress { position:absolute; left:0; top:0; bottom:0; width:100%; background:#6366f1; transform: scaleX(0); transform-origin: left center; will-change: transform; }
-    .swipe-label { position:absolute; left:50%; top:50%; transform:translate(-50%, -50%); color:#4f46e5; font-weight:700; letter-spacing:.2px; display:flex; align-items:center; gap:10px; pointer-events:none; }
+    .swipe-wrap { position: relative; width:100%; height: 56px; border-radius: 14px; background: #f8fafc; border:2px solid #c7d2fe; overflow:hidden; user-select:none; }
+    /* .swipe-progress { position:absolute; left:0; top:0; bottom:0; width:0; background:#6366f1; border-radius: 12px; will-change: width; box-shadow: inset 0 0 0 0 rgba(255, 0, 0, 0); } */
+    .swipe-label { position:absolute; left:50%; top:50%; transform:translate(-50%, -50%); color:#4f46e5; font-weight:700; letter-spacing:.2px; display:flex; align-items:center; gap:10px; pointer-events:none; z-index:2; }
     .swipe-label.done { color:#fff; }
-    .swipe-knob { position:absolute; left:6px; top:6px; width:42px; height:42px; border-radius:12px; background:#fff; box-shadow: 0 6px 18px rgba(79,70,229,.25); display:flex; align-items:center; justify-content:center; color:#4f46e5; font-size:18px; cursor:grab; transition: box-shadow .2s ease, transform .1s ease; }
+    .swipe-knob { position:absolute; left:6px; top:6px; width:44px; height:44px; border-radius:14px; background:#fff; box-shadow: 0 8px 22px rgba(79,70,229,.25); display:flex; align-items:center; justify-content:center; color:#4f46e5; font-size:18px; cursor:grab; transition: box-shadow .2s ease, transform .1s ease; z-index:3; }
     .swipe-knob:active { cursor:grabbing; transform: scale(.98); }
     .swipe-wrap.success .swipe-knob { background:#22c55e; color:#fff; box-shadow: 0 6px 18px rgba(34,197,94,.35); }
 
@@ -531,9 +532,13 @@ if (!isset($_SESSION['username'])) {
         if (!swipe) return;
         let isDown = false, startX = 0, knobX = 0, maxX = 0;
         function clamp(n, min, max){ return Math.max(min, Math.min(max, n)); }
-        let prog = 0, targetProg = 0;
-        function raf(){ prog += (targetProg - prog) * 0.25; progress.style.transform = 'scaleX(' + prog + ')'; if (Math.abs(targetProg - prog) > 0.001) requestAnimationFrame(raf); }
-        function setKnob(x){ knob.style.left = x + 'px'; targetProg = Math.max(0, Math.min(1, (x + knob.offsetWidth/2) / swipe.clientWidth)); requestAnimationFrame(raf); }
+        function setFillWidth(x){
+          const fill = Math.max(0, Math.min(swipe.clientWidth, x + knob.offsetWidth/2));
+          progress.style.width = fill + 'px';
+          progress.style.borderTopRightRadius = (fill >= swipe.clientWidth - 4) ? '12px' : '0';
+          progress.style.borderBottomRightRadius = (fill >= swipe.clientWidth - 4) ? '12px' : '0';
+        }
+        function setKnob(x){ knob.style.left = x + 'px'; setFillWidth(x); }
         function complete(){
           swipe.classList.add('success');
           label.classList.add('done');
@@ -542,7 +547,7 @@ if (!isset($_SESSION['username'])) {
         }
         function reset(){
           // hard reset progress and knob
-          prog = 0; targetProg = 0; progress.style.transform = 'scaleX(0)';
+          progress.style.width = '0px';
           knob.style.left = '6px';
           label.classList.remove('done');
           label.innerHTML = '<i class="fas fa-lock"></i> Swipe to pay';

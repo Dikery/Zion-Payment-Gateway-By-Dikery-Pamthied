@@ -42,12 +42,7 @@ $active = $active ?? '';
                     Reports
                 </a>
             </li>
-            <li class="nav-item">
-                <a href="system_settings.php" class="nav-link <?php echo $active==='settings'?'active':''; ?>">
-                    <i class="fas fa-cog nav-icon"></i>
-                    Settings
-                </a>
-            </li>
+            
         </ul>
     </nav>
 </aside>

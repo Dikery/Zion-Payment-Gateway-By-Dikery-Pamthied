@@ -9,6 +9,37 @@ require '../includes/db_connect.php';
 $messages = $_SESSION['messages'] ?? [];
 unset($_SESSION['messages']);
 
+// AJAX handlers for edit panels (fees)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax']) && $_POST['ajax'] === '1') {
+    header('Content-Type: application/json');
+    $action = $_POST['action'] ?? '';
+    if ($action === 'get_fee') {
+        $fee_id = (int)($_POST['fee_id'] ?? 0);
+        $stmt = $conn->prepare("SELECT id, title, course_name, semester, amount, due_date, late_fee, is_active FROM fee_structures WHERE id = ?");
+        if ($stmt) { $stmt->bind_param('i', $fee_id); $stmt->execute(); $res = $stmt->get_result(); $row = $res->fetch_assoc(); $stmt->close(); }
+        echo json_encode(['success' => (bool)$row, 'fee' => $row]);
+        exit();
+    }
+    if ($action === 'update_fee') {
+        $fee_id = (int)($_POST['fee_id'] ?? 0);
+        $title = trim($_POST['title'] ?? '');
+        $course_name = trim($_POST['course_name'] ?? '');
+        $semester = trim($_POST['semester'] ?? '');
+        $amount = isset($_POST['amount']) ? (float)$_POST['amount'] : 0;
+        $due_date = $_POST['due_date'] !== '' ? $_POST['due_date'] : null;
+        $late_fee = $_POST['late_fee'] !== '' ? $_POST['late_fee'] : null;
+        $is_active = isset($_POST['is_active']) && $_POST['is_active'] === '1' ? 1 : 0;
+        if ($fee_id > 0 && $course_name !== '' && $semester !== '' && $amount > 0) {
+            $stmt = $conn->prepare("UPDATE fee_structures SET title=?, course_name=?, semester=?, amount=?, due_date=?, late_fee=?, is_active=? WHERE id=?");
+            if ($stmt) { $stmt->bind_param('sssdssii', $title, $course_name, $semester, $amount, $due_date, $late_fee, $is_active, $fee_id); $ok=$stmt->execute(); $stmt->close(); }
+            echo json_encode(['success' => isset($ok) && $ok]);
+        } else {
+            echo json_encode(['success' => false, 'message' => 'Invalid input']);
+        }
+        exit();
+    }
+}
+
 $colCheck = $conn->query("SHOW COLUMNS FROM fee_structures LIKE 'title'");
 if ($colCheck && $colCheck->num_rows === 0) {
     $conn->query("ALTER TABLE fee_structures ADD COLUMN title VARCHAR(150) NULL AFTER id");
@@ -114,6 +145,7 @@ if ($res2) { while ($r = $res2->fetch_assoc()) { $fees[] = $r; } }
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="../public/theme.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script defer src="../public/ui.js"></script>
     <style>
 /* Reset and base styles */
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -577,6 +609,42 @@ body {
     background: #f8fafc;
 }
 
+/* Slide-in Edit Panel (consistent with users/courses) */
+.edit-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.3);
+    display: none;
+    align-items: stretch;
+    justify-content: flex-end;
+    z-index: 2000;
+}
+.edit-overlay.open { display: flex; }
+.edit-panel {
+    width: 480px;
+    max-width: 95vw;
+    background: #ffffff;
+    height: 100vh;
+    border-left: 1px solid #e2e8f0;
+    box-shadow: -10px 0 20px rgba(0,0,0,0.08);
+    transform: translateX(100%);
+    transition: transform .35s ease;
+    display: flex;
+    flex-direction: column;
+}
+.edit-overlay.open .edit-panel { transform: translateX(0); }
+.edit-header { padding: 16px 20px; border-bottom: 1px solid #f1f5f9; display:flex; align-items:center; justify-content:space-between; }
+.edit-title { font-weight:700; color:#1e293b; }
+.edit-body { padding: 16px 20px; overflow-y: auto; }
+.form-group { display:flex; flex-direction:column; gap:6px; margin-bottom:12px; }
+.form-group label { font-weight:600; color:#1e293b; font-size:14px; }
+.form-control { padding:10px 12px; border:1px solid #d1d5db; border-radius:8px; font-family:'Inter', sans-serif; font-size:14px; }
+.form-actions { padding: 12px 20px; border-top:1px solid #f1f5f9; display:flex; gap:10px; justify-content:flex-end; }
+.btn { padding: 10px 16px; border-radius:8px; border:1px solid #e2e8f0; background:#f8fafc; color:#374151; cursor:pointer; font-weight:600; }
+.btn.primary { background:#ff6a00; color:#fff; border-color:#ff6a00; }
+.btn.primary:hover { background:#e65e00; }
+.btn.secondary:hover { background:#eef2f7; }
+
 /* Tables */
 .table-container {
     margin-top: 32px;
@@ -733,7 +801,8 @@ body {
                     <h1>Fee Management</h1>
                     <p>Create and manage fee structures</p>
                 </div>
-                <div class="header-right">
+                
+                <!-- <div class="header-right">
                     <div class="notification-icon">
                         <i class="fas fa-bell"></i>
                     </div>
@@ -741,7 +810,7 @@ body {
                         <div class="user-avatar">ZA</div>
                         <div class="user-name">Zion Admin</div>
                     </div>
-                </div>
+                </div> -->
             </header>
 
             <!-- Flash Messages -->
@@ -852,46 +921,7 @@ body {
                                                             <?php echo $f['is_active'] ? 'Deactivate' : 'Activate'; ?>
                                                         </button>
                                                     </form>
-                                                    <details>
-                                                        <summary class="btn-small" style="cursor:pointer;">Edit</summary>
-                                                        <form method="POST" style="margin-top: 8px; padding: 12px; background: #f8fafc; border-radius: 8px; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">
-                                                            <input type="hidden" name="action" value="edit_fee" />
-                                                            <input type="hidden" name="fee_id" value="<?php echo (int)$f['id']; ?>" />
-                                                            <div>
-                                                                <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Title</label>
-                                                                <input type="text" name="fee_title" value="<?php echo htmlspecialchars($f['title'] ?? ''); ?>" style="width: 100%; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px;" />
-                                                            </div>
-                                                            <div>
-                                                                <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Course</label>
-                                                                <select name="fee_course" required style="width: 100%; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px;">
-                                                                    <?php foreach ($courses as $c): ?>
-                                                                        <option value="<?php echo htmlspecialchars($c['name']); ?>" <?php echo $c['name'] === $f['course_name'] ? 'selected' : ''; ?>>
-                                                                            <?php echo htmlspecialchars($c['name']); ?>
-                                                                        </option>
-                                                                    <?php endforeach; ?>
-                                                                </select>
-                                                            </div>
-                                                            <div>
-                                                                <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Semester</label>
-                                                                <input type="text" name="fee_semester" value="<?php echo htmlspecialchars($f['semester']); ?>" style="width: 100%; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px;" />
-                                                            </div>
-                                                            <div>
-                                                                <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Amount</label>
-                                                                <input type="number" step="0.01" name="fee_amount" value="<?php echo htmlspecialchars((string)$f['amount']); ?>" required style="width: 100%; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px;" />
-                                                            </div>
-                                                            <div>
-                                                                <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Due Date</label>
-                                                                <input type="date" name="fee_due_date" value="<?php echo $f['due_date'] ? htmlspecialchars($f['due_date']) : ''; ?>" style="width: 100%; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px;" />
-                                                            </div>
-                                                            <div>
-                                                                <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Late Fee</label>
-                                                                <input type="number" step="0.01" name="late_fee" value="<?php echo $f['late_fee'] !== null ? htmlspecialchars((string)$f['late_fee']) : ''; ?>" style="width: 100%; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px;" />
-                                                            </div>
-                                                            <div style="grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px;">
-                                                                <button class="btn-small primary" type="submit">Save</button>
-                                                            </div>
-                                                        </form>
-                                                    </details>
+                                                <button class="btn-small" type="button" onclick="openEditFeePanel(<?php echo (int)$f['id']; ?>)">Edit</button>
                                                     <form method="POST" style="display:inline;" onsubmit="return confirm('Delete this fee? This cannot be undone.');">
                                                         <input type="hidden" name="action" value="delete_fee" />
                                                         <input type="hidden" name="fee_id" value="<?php echo (int)$f['id']; ?>" />
@@ -906,6 +936,60 @@ body {
                         <?php else: ?>
                             <div style="text-align: center; color: #64748b; padding: 40px;">No fee structures yet.</div>
                         <?php endif; ?>
+                    </div>
+                </div>
+
+                <!-- Slide-in Edit Panel -->
+                <div class="edit-overlay" id="editOverlay" aria-hidden="true">
+                    <div class="edit-panel" role="dialog" aria-modal="true">
+                        <div class="edit-header">
+                            <div class="edit-title">Edit Fee Structure</div>
+                            <button class="btn" id="btnCloseEdit">Close</button>
+                        </div>
+                        <div class="edit-body">
+                            <form id="editForm">
+                                <input type="hidden" name="fee_id" id="edit_fee_id" />
+                                <div class="form-group">
+                                    <label>Title</label>
+                                    <input type="text" class="form-control" name="title" id="edit_title" />
+                                </div>
+                                <div class="form-group">
+                                    <label>Course</label>
+                                    <select class="form-control" name="course_name" id="edit_course_name">
+                                        <?php foreach ($courses as $c): ?>
+                                            <option value="<?php echo htmlspecialchars($c['name']); ?>"><?php echo htmlspecialchars($c['name']); ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Semester</label>
+                                    <input type="text" class="form-control" name="semester" id="edit_semester" />
+                                </div>
+                                <div class="form-group">
+                                    <label>Amount (₹)</label>
+                                    <input type="number" step="0.01" class="form-control" name="amount" id="edit_amount" />
+                                </div>
+                                <div class="form-group">
+                                    <label>Due Date</label>
+                                    <input type="date" class="form-control" name="due_date" id="edit_due_date" />
+                                </div>
+                                <div class="form-group">
+                                    <label>Late Fee (₹)</label>
+                                    <input type="number" step="0.01" class="form-control" name="late_fee" id="edit_late_fee" />
+                                </div>
+                                <div class="form-group">
+                                    <label>Status</label>
+                                    <select class="form-control" name="is_active" id="edit_is_active">
+                                        <option value="1">Active</option>
+                                        <option value="0">Inactive</option>
+                                    </select>
+                                </div>
+                            </form>
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn secondary" id="btnCancelEdit" type="button">Cancel</button>
+                            <button class="btn primary" id="btnSaveEdit" type="button">Save Changes</button>
+                        </div>
                     </div>
                 </div>
 
@@ -982,6 +1066,81 @@ body {
                 } catch(e) { /* noop */ }
             }
             if (courseSel) { courseSel.addEventListener('change', loadSemesters); }
+        })();
+    </script>
+    <script>
+        // Edit panel wiring
+        (function(){
+            const overlay = document.getElementById('editOverlay');
+            const btnClose = document.getElementById('btnCloseEdit');
+            const btnCancel = document.getElementById('btnCancelEdit');
+            const btnSave = document.getElementById('btnSaveEdit');
+            const form = document.getElementById('editForm');
+            const fields = {
+                id: document.getElementById('edit_fee_id'),
+                title: document.getElementById('edit_title'),
+                course: document.getElementById('edit_course_name'),
+                semester: document.getElementById('edit_semester'),
+                amount: document.getElementById('edit_amount'),
+                due: document.getElementById('edit_due_date'),
+                late: document.getElementById('edit_late_fee')
+            };
+
+            window.openEditFeePanel = async function(feeId){
+                overlay.classList.add('open');
+                overlay.setAttribute('aria-hidden','false');
+                const fd = new FormData();
+                fd.append('action','get_fee'); fd.append('ajax','1'); fd.append('fee_id', feeId);
+                try {
+                    const res = await fetch('fee_management.php', { method:'POST', body: fd });
+                    const data = await res.json();
+                        if (data && data.success) {
+                        const f = data.fee;
+                        fields.id.value = f.id;
+                        fields.title.value = f.title || '';
+                        fields.course.value = f.course_name || '';
+                        fields.semester.value = f.semester || '';
+                        fields.amount.value = f.amount != null ? f.amount : '';
+                        fields.due.value = f.due_date || '';
+                        fields.late.value = f.late_fee != null ? f.late_fee : '';
+                            const activeSel = document.getElementById('edit_is_active');
+                            if (activeSel) { activeSel.value = f.is_active ? '1' : '0'; }
+                    }
+                } catch(e) {}
+            }
+
+            function closePanel(){ overlay.classList.remove('open'); overlay.setAttribute('aria-hidden','true'); }
+            btnClose.addEventListener('click', closePanel); btnCancel.addEventListener('click', closePanel);
+
+            btnSave.addEventListener('click', async function(){
+                const fd = new FormData(form);
+                fd.append('action','update_fee'); fd.append('ajax','1');
+                try {
+                    const res = await fetch('fee_management.php', { method:'POST', body: fd });
+                    const data = await res.json();
+                    if (data && data.success) {
+                        const rowBtn = document.querySelector(`button[onclick=\"openEditFeePanel(${fields.id.value})\"]`);
+                        const row = rowBtn ? rowBtn.closest('tr') : null;
+                        if (row) {
+                            row.cells[0].textContent = fields.title.value || (fields.course.value + ' ' + fields.semester.value);
+                            row.cells[1].textContent = fields.course.value;
+                            row.cells[2].textContent = fields.semester.value;
+                            row.cells[3].textContent = '₹' + Number(fields.amount.value || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+                            row.cells[4].textContent = fields.due.value || '—';
+                            row.cells[5].textContent = fields.late.value ? ('₹' + Number(fields.late.value).toLocaleString()) : '—';
+                            const badge = row.querySelector('.badge');
+                            const isActive = document.getElementById('edit_is_active').value === '1';
+                            if (badge) {
+                                badge.textContent = isActive ? 'Active' : 'Inactive';
+                                badge.className = 'badge ' + (isActive ? 'active' : 'inactive');
+                            }
+                        }
+                        closePanel();
+                    } else {
+                        alert(data && data.message ? data.message : 'Failed to update fee');
+                    }
+                } catch(e) { alert('Failed to update fee'); }
+            });
         })();
     </script>
 </body>

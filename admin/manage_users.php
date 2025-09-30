@@ -19,6 +19,81 @@ $filter_type = isset($_GET['type']) ? trim($_GET['type']) : '';
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $action = $_POST['action'] ?? '';
 
+    // AJAX: Fetch user details
+    if ($action === 'get_user' && isset($_POST['user_id']) && ($_POST['ajax'] ?? '') === '1') {
+        header('Content-Type: application/json');
+        $user_id = intval($_POST['user_id']);
+        $stmt = $conn->prepare("SELECT u.id, u.username, u.email, u.first_name, u.last_name, u.contact, u.user_type,
+                                       sd.student_id, sd.course, sd.semester
+                                FROM users u
+                                LEFT JOIN student_details sd ON sd.user_id = u.id
+                                WHERE u.id = ?");
+        if (!$stmt) { echo json_encode(['success'=>false,'message'=>'Failed to prepare']); exit(); }
+        $stmt->bind_param('i', $user_id);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        if ($row = $res->fetch_assoc()) {
+            echo json_encode(['success'=>true,'user'=>$row]);
+        } else {
+            echo json_encode(['success'=>false,'message'=>'User not found']);
+        }
+        exit();
+    }
+
+    // AJAX: Update user details
+    if ($action === 'update_user' && ($_POST['ajax'] ?? '') === '1') {
+        header('Content-Type: application/json');
+        $user_id = intval($_POST['user_id'] ?? 0);
+        $first_name = trim($_POST['first_name'] ?? '');
+        $last_name = trim($_POST['last_name'] ?? '');
+        $email = trim($_POST['email'] ?? '');
+        $contact = trim($_POST['contact'] ?? '');
+        $user_type = trim($_POST['user_type'] ?? 'student');
+        $student_id_u = trim($_POST['student_id'] ?? '');
+        $course = trim($_POST['course'] ?? '');
+        $semester = trim($_POST['semester'] ?? '');
+
+        if ($user_id <= 0 || $first_name === '' || $last_name === '' || $email === '') {
+            echo json_encode(['success'=>false,'message'=>'Missing required fields']);
+            exit();
+        }
+
+        $conn->begin_transaction();
+        try {
+            $u_stmt = $conn->prepare("UPDATE users SET first_name=?, last_name=?, email=?, contact=?, user_type=? WHERE id=?");
+            if (!$u_stmt) { throw new Exception('Failed to prepare users update'); }
+            $u_stmt->bind_param('sssssi', $first_name, $last_name, $email, $contact, $user_type, $user_id);
+            $u_stmt->execute();
+            $u_stmt->close();
+
+            // Ensure student_details row exists for students
+            if ($user_type === 'student') {
+                // Try update first
+                $sd_stmt = $conn->prepare("UPDATE student_details SET student_id=?, course=?, semester=? WHERE user_id=?");
+                if (!$sd_stmt) { throw new Exception('Failed to prepare student_details update'); }
+                $sd_stmt->bind_param('sssi', $student_id_u, $course, $semester, $user_id);
+                $sd_stmt->execute();
+                if ($sd_stmt->affected_rows === 0) {
+                    $sd_stmt->close();
+                    $ins_stmt = $conn->prepare("INSERT INTO student_details (user_id, student_id, course, semester) VALUES (?,?,?,?)");
+                    if (!$ins_stmt) { throw new Exception('Failed to prepare student_details insert'); }
+                    $ins_stmt->bind_param('isss', $user_id, $student_id_u, $course, $semester);
+                    $ins_stmt->execute();
+                    $ins_stmt->close();
+                } else {
+                    $sd_stmt->close();
+                }
+            }
+
+            $conn->commit();
+            echo json_encode(['success'=>true]);
+        } catch (Throwable $e) {
+            $conn->rollback();
+            echo json_encode(['success'=>false,'message'=>'Update failed']);
+        }
+        exit();
+    }
+
     if ($action === 'delete_user' && isset($_POST['user_id'])) {
         $user_id = intval($_POST['user_id']);
 
@@ -121,6 +196,7 @@ if ($sem_res) { while ($r = $sem_res->fetch_assoc()) { $semesters_options[] = $r
     <title>User Management - Admin Dashboard</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script defer src="../public/ui.js"></script>
     <style>
 /* Reset and base styles */
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -441,6 +517,44 @@ body {
     font-size: 14px;
 }
 
+/* Edit panel */
+.edit-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.3);
+    display: none;
+    align-items: stretch;
+    justify-content: flex-end;
+    z-index: 2000;
+}
+.edit-overlay.open { display: flex; }
+.edit-panel {
+    width: 420px;
+    max-width: 90vw;
+    background: #ffffff;
+    height: 100vh;
+    border-left: 1px solid #e2e8f0;
+    box-shadow: -10px 0 20px rgba(0,0,0,0.08);
+    transform: translateX(100%);
+    transition: transform .35s ease;
+    display: flex;
+    flex-direction: column;
+}
+.edit-overlay.open .edit-panel { transform: translateX(0); }
+.edit-header { padding: 16px 20px; border-bottom: 1px solid #f1f5f9; display:flex; align-items:center; justify-content:space-between; }
+.edit-title { font-weight:700; color:#1e293b; }
+.edit-body { padding: 16px 20px; overflow-y: auto; }
+.form-group { display:flex; flex-direction:column; gap:6px; margin-bottom:12px; }
+.form-group label { font-weight:600; color:#1e293b; font-size:14px; }
+.form-control { padding:10px 12px; border:1px solid #d1d5db; border-radius:8px; font-family:'Inter', sans-serif; font-size:14px; }
+.form-actions { padding: 12px 20px; border-top:1px solid #f1f5f9; display:flex; gap:10px; justify-content:flex-end; }
+.btn {
+    padding: 10px 16px; border-radius:8px; border:1px solid #e2e8f0; background:#f8fafc; color:#374151; cursor:pointer; font-weight:600;
+}
+.btn.primary { background:#ff6a00; color:#fff; border-color:#ff6a00; }
+.btn.primary:hover { background:#e65e00; }
+.btn.secondary:hover { background:#eef2f7; }
+
 .user-name {
     font-weight: 600;
     color: #1e293b;
@@ -707,7 +821,7 @@ body {
                                     <td><?php echo date('M d, Y', strtotime($user['created_at'])); ?></td>
                                     <td>
                                         <div class="user-actions">
-                                            <button class="btn-small" onclick="editUser(<?php echo $user['id']; ?>)">
+                                            <button class="btn-small" onclick="openEditPanel(<?php echo $user['id']; ?>)">
                                                 <i class="fas fa-edit"></i>
                                                 Edit
                                             </button>
@@ -738,6 +852,60 @@ body {
                         <?php endif; ?>
                     </tbody>
                 </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Panel UI -->
+    <div class="edit-overlay" id="editOverlay" aria-hidden="true">
+        <div class="edit-panel" role="dialog" aria-modal="true">
+            <div class="edit-header">
+                <div class="edit-title">Edit User</div>
+                <button class="btn" id="btnCloseEdit">Close</button>
+            </div>
+            <div class="edit-body">
+                <form id="editForm">
+                    <input type="hidden" name="user_id" id="edit_user_id" />
+                    <div class="form-group">
+                        <label>First Name</label>
+                        <input type="text" class="form-control" name="first_name" id="edit_first_name" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Last Name</label>
+                        <input type="text" class="form-control" name="last_name" id="edit_last_name" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" class="form-control" name="email" id="edit_email" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Contact</label>
+                        <input type="text" class="form-control" name="contact" id="edit_contact" />
+                    </div>
+                    <div class="form-group">
+                        <label>User Type</label>
+                        <select class="form-control" name="user_type" id="edit_user_type">
+                            <option value="student">Student</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Student ID</label>
+                        <input type="text" class="form-control" name="student_id" id="edit_student_id" />
+                    </div>
+                    <div class="form-group">
+                        <label>Course</label>
+                        <input type="text" class="form-control" name="course" id="edit_course" />
+                    </div>
+                    <div class="form-group">
+                        <label>Semester</label>
+                        <input type="text" class="form-control" name="semester" id="edit_semester" />
+                    </div>
+                </form>
+            </div>
+            <div class="form-actions">
+                <button class="btn secondary" id="btnCancelEdit" type="button">Cancel</button>
+                <button class="btn primary" id="btnSaveEdit" type="button">Save Changes</button>
             </div>
         </div>
     </div>
@@ -799,10 +967,90 @@ body {
             typeFilter.addEventListener('change', applyFilters);
         });
 
-        function editUser(userId) {
-            // In a real application, this would open an edit modal or redirect to edit page
-            alert('Edit user functionality would be implemented here. User ID: ' + userId);
+        // Edit panel logic
+        const overlay = document.getElementById('editOverlay');
+        const btnCloseEdit = document.getElementById('btnCloseEdit');
+        const btnCancelEdit = document.getElementById('btnCancelEdit');
+        const btnSaveEdit = document.getElementById('btnSaveEdit');
+        const editForm = document.getElementById('editForm');
+        const fields = {
+            user_id: document.getElementById('edit_user_id'),
+            first_name: document.getElementById('edit_first_name'),
+            last_name: document.getElementById('edit_last_name'),
+            email: document.getElementById('edit_email'),
+            contact: document.getElementById('edit_contact'),
+            user_type: document.getElementById('edit_user_type'),
+            student_id: document.getElementById('edit_student_id'),
+            course: document.getElementById('edit_course'),
+            semester: document.getElementById('edit_semester')
+        };
+
+        window.openEditPanel = async function(userId){
+            overlay.classList.add('open');
+            overlay.setAttribute('aria-hidden','false');
+            // Load data
+            const formData = new FormData();
+            formData.append('action','get_user');
+            formData.append('ajax','1');
+            formData.append('user_id', userId);
+            try {
+                const res = await fetch('manage_users.php', { method:'POST', body: formData });
+                const data = await res.json();
+                if (data && data.success) {
+                    const u = data.user;
+                    fields.user_id.value = u.id;
+                    fields.first_name.value = u.first_name || '';
+                    fields.last_name.value = u.last_name || '';
+                    fields.email.value = u.email || '';
+                    fields.contact.value = u.contact || '';
+                    fields.user_type.value = u.user_type || 'student';
+                    fields.student_id.value = u.student_id || '';
+                    fields.course.value = u.course || '';
+                    fields.semester.value = u.semester || '';
+                }
+            } catch(e) {}
         }
+
+        function closeEditPanel(){
+            overlay.classList.remove('open');
+            overlay.setAttribute('aria-hidden','true');
+        }
+
+        btnCloseEdit.addEventListener('click', closeEditPanel);
+        btnCancelEdit.addEventListener('click', closeEditPanel);
+
+        btnSaveEdit.addEventListener('click', async function(){
+            const formData = new FormData(editForm);
+            formData.append('action','update_user');
+            formData.append('ajax','1');
+            try {
+                const res = await fetch('manage_users.php', { method:'POST', body: formData });
+                const data = await res.json();
+                if (data && data.success) {
+                    // Update the row UI optimistically
+                    const userId = fields.user_id.value;
+                    const row = document.querySelector(`#usersTableBody tr button[onclick="openEditPanel(${userId})"]`)?.closest('tr');
+                    if (row) {
+                        row.cells[0].querySelector('.user-name').textContent = `${fields.first_name.value} ${fields.last_name.value}`;
+                        row.cells[0].querySelector('.user-email').textContent = fields.email.value;
+                        const typeBadge = row.querySelector('.user-type');
+                        if (typeBadge) {
+                            typeBadge.textContent = fields.user_type.value.charAt(0).toUpperCase()+fields.user_type.value.slice(1);
+                            typeBadge.className = `user-type type-${fields.user_type.value}`;
+                        }
+                        row.cells[1].children[0].innerHTML = `<strong>Student ID:</strong> ${fields.student_id.value || 'N/A'}`;
+                        row.cells[1].children[1].innerHTML = `<strong>Course:</strong> ${fields.course.value || 'N/A'}`;
+                        row.cells[1].children[2].innerHTML = `<strong>Semester:</strong> ${fields.semester.value || 'N/A'}`;
+                    }
+                    closeEditPanel();
+                } else {
+                    alert(data && data.message ? data.message : 'Failed to update user');
+                }
+            } catch(e) {
+                alert('Failed to update user');
+            }
+        });
+        
     </script>
 </body>
 </html>
