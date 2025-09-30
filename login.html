@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zion Login</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="public/theme.css" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      min-height: 100vh;
+      display: flex;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      width: 100%;
+      max-width: 1100px;
+      margin: auto;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 12px 36px rgba(15,23,42,0.08);
+    }
+
+    .left {
+      padding: 36px 40px;
+      background: #fff;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 28px;
+    }
+
+    .brand-icon {
+      width: 36px; height: 36px; border-radius: 10px;
+      display: inline-flex; align-items: center; justify-content: center;
+      color: #fff;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      box-shadow: 0 6px 14px rgba(102,126,234,0.35);
+    }
+
+    .brand-name { font-weight: 800; font-size: 1.05rem; color: #111827; }
+
+    .welcome-title { font-size: 2rem; font-weight: 800; color: #111827; margin-bottom: 8px; }
+    .welcome-sub { color: #6b7280; margin-bottom: 22px; }
+
+    .form {
+      margin-top: 8px;
+    }
+
+    .form-group { margin-bottom: 18px; }
+    .form-group label { display:block; margin-bottom: 8px; color:#374151; font-weight: 600; font-size: .9rem; }
+    .input-wrap { position: relative; }
+    .input-icon { position:absolute; left:14px; top:50%; transform: translateY(-50%); color:#9ca3af; }
+    input[type=text], input[type=password] {
+      width: 100%;
+      padding: 14px 14px 14px 42px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      background: #fff;
+      transition: all .2s ease;
+      font-size: 0.98rem;
+    }
+    input[type=text]:focus, input[type=password]:focus { border-color: #667eea; box-shadow: 0 0 0 3px rgba(102,126,234,.12); outline: none; }
+    .password-toggle { position:absolute; right:12px; top:50%; transform:translateY(-50%); color:#9ca3af; cursor: pointer; }
+
+    .row-inline { display:flex; align-items:center; justify-content:space-between; margin: 8px 0 4px; }
+    .remember { display:flex; align-items:center; gap:8px; color:#6b7280; font-size:.9rem; }
+    .forgot a { color:#667eea; text-decoration:none; font-weight:600; font-size:.9rem; }
+    .forgot a:hover { text-decoration: underline; }
+
+    .btn-primary {
+      width: 100%;
+      padding: 14px 16px;
+      border: none;
+      border-radius: 10px;
+      background: #6366f1;
+      color: #fff;
+      font-weight: 700;
+      display: inline-flex; align-items:center; justify-content:center; gap:10px;
+      cursor:pointer; transition: all .2s ease; position: relative; overflow: hidden;
+    }
+    .btn-primary::before { content:''; position:absolute; left:-100%; top:0; width:100%; height:100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,.25), transparent); transition:left .5s; }
+    .btn-primary:hover::before { left:100%; }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 10px 18px rgba(99,102,241,.25); }
+
+    .divider { display:flex; align-items:center; gap:12px; margin: 18px 0; color:#9ca3af; font-size:.85rem; }
+    .divider .line { flex:1; height:1px; background:#e5e7eb; }
+
+    .admin-btn {
+      width: 100%;
+      padding: 12px 16px;
+      border: 1.5px solid #111827;
+      border-radius: 10px;
+      background: #111827;
+      color: #fff;
+      font-weight: 700;
+      display: inline-flex; align-items:center; justify-content:center; gap:10px;
+      text-decoration: none;
+      transition: all .2s ease;
+    }
+    .admin-btn:hover { background: #0b1220; box-shadow: 0 8px 18px rgba(17,24,39,.25); }
+
+    .meta { text-align:center; margin-top: 16px; color:#6b7280; font-size:.9rem; }
+    .meta a { color:#667eea; font-weight:600; text-decoration:none; }
+    .meta a:hover { text-decoration: underline; }
+
+    .right {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #fff;
+      padding: 44px 46px;
+      position: relative;
+    }
+    .right::after { content:''; position:absolute; width:240px; height:240px; right:-60px; top:-60px; border-radius:50%; background: rgba(255,255,255,.08); filter: blur(0.5px); }
+    .promo-icon { width:56px; height:56px; border-radius:14px; display:flex; align-items:center; justify-content:center; background: rgba(255,255,255,.15); margin-bottom: 22px; }
+    .promo-title { font-size: 2rem; font-weight: 800; line-height: 1.2; margin-bottom: 14px; }
+    .promo-sub { color: rgba(255,255,255,.9); line-height:1.6; margin-bottom: 18px; }
+    .bullets { display:flex; flex-direction:column; gap:12px; }
+    .bullets li { list-style:none; display:flex; align-items:center; gap:10px; }
+    .bullets i { color:#a5b4fc; }
+
+    @media (max-width: 900px) { .layout { grid-template-columns: 1fr; max-width: 640px; } .right { display:none; } }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <div class="left">
+      <div class="brand">
+        <div class="brand-icon"><i class="fas fa-graduation-cap"></i></div>
+        <div class="brand-name">Zion</div>
+      </div>
+
+      <div class="welcome">
+        <div class="welcome-title">Welcome back</div>
+        <div class="welcome-sub" id="welcomeSub">Sign in to continue your studies</div>
+      </div>
+
+      <form class="form" id="loginForm" action="auth/login.php" method="POST">
+        <div class="form-group">
+          <label for="username" id="userLabel">Email address</label>
+          <div class="input-wrap">
+            <i class="fas fa-envelope input-icon"></i>
+            <input type="text" id="username" name="username" placeholder="Enter your email or username" required autofocus />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="password">Password</label>
+          <div class="input-wrap">
+            <i class="fas fa-lock input-icon"></i>
+            <input type="password" id="password" name="password" placeholder="Enter your password" required />
+            <i class="fas fa-eye password-toggle" id="passwordToggle"></i>
+          </div>
+        </div>
+
+        <div class="row-inline">
+          <label class="remember"><input type="checkbox" id="rememberMe"> Remember me</label>
+          <div class="forgot"><a href="#">Forgot password?</a></div>
+        </div>
+
+        <button type="submit" class="btn-primary" id="loginBtn"><i class="fas fa-sign-in-alt"></i> Sign in</button>
+
+        <div class="divider" style="margin-top:16px;">
+          <span class="line"></span>
+          <span>or</span>
+          <span class="line"></span>
+        </div>
+
+        <a class="admin-btn" id="adminBtn" href="login.html?admin=1"><i class="fas fa-user-shield"></i> Admin login</a>
+
+        <div class="meta">
+          Don't have an account? <a href="auth/register.php">Sign up for free</a>
+          <div style="margin-top:10px;"><a href="index.html"><i class="fas fa-arrow-left"></i> Back to Home</a></div>
+        </div>
+      </form>
+    </div>
+
+    <div class="right">
+      <div class="promo-icon"><i class="fas fa-shield-halved"></i></div>
+      <div class="promo-title">Start your journey with Zion</div>
+      <div class="promo-sub">Secure fee payments, clear dues tracking, and instant receipts—built for students and administrators.</div>
+      <ul class="bullets">
+        <li><i class="fas fa-check-circle"></i> Secure and encrypted data</li>
+        <li><i class="fas fa-check-circle"></i> 24/7 portal access</li>
+        <li><i class="fas fa-check-circle"></i> Easy admin collaboration</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const loginForm = document.getElementById('loginForm');
+      const loginBtn = document.getElementById('loginBtn');
+      const passwordToggle = document.getElementById('passwordToggle');
+      const passwordInput = document.getElementById('password');
+
+      // Toggle password visibility
+      passwordToggle.addEventListener('click', function() {
+        if (passwordInput.type === 'password') {
+          passwordInput.type = 'text';
+          this.classList.remove('fa-eye');
+          this.classList.add('fa-eye-slash');
+        } else {
+          passwordInput.type = 'password';
+          this.classList.remove('fa-eye-slash');
+          this.classList.add('fa-eye');
+        }
+      });
+
+      // Submit animation
+      loginForm.addEventListener('submit', function() {
+        loginBtn.disabled = true;
+        loginBtn.style.opacity = '0.7';
+      });
+
+      // Admin mode via query param
+      const url = new URL(window.location.href);
+      if (url.searchParams.get('admin') === '1') {
+        document.getElementById('welcomeSub').textContent = 'Administrator access';
+        document.getElementById('userLabel').textContent = 'Admin username or email';
+        const username = document.getElementById('username');
+        if (!username.value) { username.placeholder = 'Enter admin username or email'; }
+      }
+    });
+  </script>
+</body>
+</html>

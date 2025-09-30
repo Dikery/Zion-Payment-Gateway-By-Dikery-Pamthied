@@ -1,0 +1,81 @@
+-- Create database
+CREATE DATABASE IF NOT EXISTS `zion`
+  DEFAULT CHARACTER SET utf8mb4
+  DEFAULT COLLATE utf8mb4_unicode_ci;
+
+USE `zion`;
+
+-- Users table
+CREATE TABLE IF NOT EXISTS `users` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `username` VARCHAR(50) NOT NULL UNIQUE,
+  `email` VARCHAR(100) NOT NULL UNIQUE,
+  `password` VARCHAR(255) NOT NULL,
+  `first_name` VARCHAR(50) NOT NULL,
+  `last_name` VARCHAR(50) NOT NULL,
+  `contact` VARCHAR(15) NOT NULL,
+  `user_type` ENUM('admin','student') NOT NULL DEFAULT 'student',
+  `total_paid` DECIMAL(10,2) NOT NULL DEFAULT 0,
+  `last_payment_date` TIMESTAMP NULL DEFAULT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB
+  DEFAULT CHARSET=utf8mb4
+  COLLATE=utf8mb4_unicode_ci;
+
+-- Student details table
+CREATE TABLE IF NOT EXISTS `student_details` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `user_id` INT UNSIGNED NOT NULL,
+  `student_id` VARCHAR(20) NOT NULL UNIQUE,
+  `course` VARCHAR(100) DEFAULT NULL,
+  `semester` VARCHAR(20) DEFAULT NULL,
+  `fee_amount` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  `outstanding_amount` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_student_details_user_id` (`user_id`),
+  CONSTRAINT `fk_student_details_user`
+    FOREIGN KEY (`user_id`) REFERENCES `users`(`id`)
+    ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB
+  DEFAULT CHARSET=utf8mb4
+  COLLATE=utf8mb4_unicode_ci;
+
+-- Payments table
+CREATE TABLE IF NOT EXISTS `payments` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `user_id` INT UNSIGNED NOT NULL,
+  `amount` DECIMAL(10,2) NOT NULL,
+  `payment_method` VARCHAR(50) NOT NULL,
+  `transaction_id` VARCHAR(100) NOT NULL UNIQUE,
+  `status` VARCHAR(20) NOT NULL DEFAULT 'completed',
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_payments_user_id` (`user_id`),
+  KEY `idx_payments_created_at` (`created_at`),
+  CONSTRAINT `fk_payments_user`
+    FOREIGN KEY (`user_id`) REFERENCES `users`(`id`)
+    ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB
+  DEFAULT CHARSET=utf8mb4
+  COLLATE=utf8mb4_unicode_ci;
+
+-- Default admin user (password: admin123)
+-- Note: Replace the hash if you change the password
+INSERT INTO `users` (`username`, `email`, `password`, `first_name`, `last_name`, `contact`, `user_type`)
+VALUES (
+  'admin',
+  'admin@zion.edu',
+  '$2y$10$T1Zb4C0ghk5h2m5bIhQK1e0r2xN9Jk1mS4F5nE0Qqv0Qe5qGmU6h2', -- hash of 'admin123'
+  'System',
+  'Administrator',
+  '0000000000',
+  'admin'
+)
+ON DUPLICATE KEY UPDATE
+  `username` = VALUES(`username`);
+
+  Run this once, then log in with username admin and password admin123.

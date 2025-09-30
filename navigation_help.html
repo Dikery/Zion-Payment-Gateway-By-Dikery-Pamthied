@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Zion Portal - Navigation Help</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .step { background: #f5f5f5; padding: 15px; margin: 10px 0; border-radius: 8px; }
+        .error { background: #ffe6e6; border: 1px solid #ff9999; }
+        .success { background: #e6ffe6; border: 1px solid #99ff99; }
+        a { color: #667eea; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎓 Zion Fee Payment Portal - Navigation Guide</h1>
+        
+        <h2>✅ Correct Navigation Flow:</h2>
+        
+        <div class="step success">
+            <strong>1. Start Here:</strong> <a href="index.html">localhost/zion/</a> (shows index.html)
+        </div>
+        
+        <div class="step success">
+            <strong>2. Login Page:</strong> Click "Student Login" → <a href="login.html">localhost/zion/login.html</a>
+        </div>
+        
+        <div class="step success">
+            <strong>3. Submit Form:</strong> Enter credentials → form submits to <code>localhost/zion/auth/login.php</code>
+        </div>
+        
+        <div class="step success">
+            <strong>4. After Login:</strong> Redirects to <a href="dashboard.php">localhost/zion/dashboard.php</a>
+        </div>
+        
+        <div class="step success">
+            <strong>5. Payment Pages:</strong><br>
+            • <a href="make_payment.php">Make Payment</a> → localhost/zion/make_payment.php<br>
+            • <a href="payment_history.php">Payment History</a> → localhost/zion/payment_history.php
+        </div>
+        
+        <h2>❌ Common Mistakes:</h2>
+        
+        <div class="step error">
+            <strong>Don't go to:</strong> <code>localhost/zion/login.php</code><br>
+            <strong>Why:</strong> This is not the login page - it's just a redirect helper
+        </div>
+        
+        <div class="step error">
+            <strong>Don't access PHP files directly</strong> without being logged in<br>
+            <strong>Why:</strong> They will redirect you back to the login page
+        </div>
+        
+        <h2>🔧 Test Your Setup:</h2>
+        
+        <div class="step">
+            <strong>File Test:</strong> <a href="test_flow.php">Check if all files exist</a>
+        </div>
+        
+        <div class="step">
+            <strong>Database Test:</strong> Make sure your MySQL server is running and the 'zion' database exists
+        </div>
+        
+        <h2>🚀 Quick Start:</h2>
+        
+        <div class="step success">
+            <a href="index.html">👉 Start Here - Go to Homepage</a>
+        </div>
+        
+        <hr>
+        <p><small>If you're still having issues, make sure your XAMPP Apache and MySQL are running.</small></p>
+    </div>
+</body>
+</html>
