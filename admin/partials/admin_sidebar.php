@@ -25,7 +25,7 @@ $active = $active ?? '';
                 </a>
             </li>
             <li class="nav-item">
-                <a href="fee_management.php#courses" class="nav-link <?php echo $active==='courses'?'active':''; ?>">
+                <a href="courses.php" class="nav-link <?php echo $active==='courses'?'active':''; ?>">
                     <i class="fas fa-book nav-icon"></i>
                     Courses
                 </a>

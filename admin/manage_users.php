@@ -9,6 +9,12 @@ if (!isset($_SESSION['user_type']) || $_SESSION['user_type'] !== 'admin') {
 
 require '../includes/db_connect.php';
 
+// Filters (GET)
+$filter_search = isset($_GET['q']) ? trim($_GET['q']) : '';
+$filter_course = isset($_GET['course']) ? trim($_GET['course']) : '';
+$filter_semester = isset($_GET['semester']) ? trim($_GET['semester']) : '';
+$filter_type = isset($_GET['type']) ? trim($_GET['type']) : '';
+
 // Handle user actions
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $action = $_POST['action'] ?? '';
@@ -34,14 +40,59 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     }
 }
 
-// Get all users with their details
-$users_sql = "SELECT u.id, u.username, u.email, u.first_name, u.last_name, u.contact,
-                     u.created_at, u.user_type, u.last_payment_date, u.total_paid,
-                     sd.student_id, sd.course, sd.semester
-              FROM users u
-              LEFT JOIN student_details sd ON u.id = sd.user_id
-              ORDER BY u.created_at DESC";
-$users_result = $conn->query($users_sql);
+// Build filtered users query with prepared statement
+$base_sql = "SELECT u.id, u.username, u.email, u.first_name, u.last_name, u.contact,
+                    u.created_at, u.user_type, u.last_payment_date, u.total_paid,
+                    sd.student_id, sd.course, sd.semester
+             FROM users u
+             LEFT JOIN student_details sd ON u.id = sd.user_id";
+
+$conditions = [];
+$types = '';
+$params = [];
+
+if ($filter_search !== '') {
+    $conditions[] = "(CONCAT(COALESCE(u.first_name,''),' ',COALESCE(u.last_name,'')) LIKE ? OR u.email LIKE ? OR sd.student_id LIKE ?)";
+    $searchLike = '%' . $filter_search . '%';
+    $types .= 'sss';
+    $params[] = $searchLike; $params[] = $searchLike; $params[] = $searchLike;
+}
+
+if ($filter_course !== '') {
+    $conditions[] = "sd.course = ?";
+    $types .= 's';
+    $params[] = $filter_course;
+}
+
+if ($filter_semester !== '') {
+    $conditions[] = "sd.semester = ?";
+    $types .= 's';
+    $params[] = $filter_semester;
+}
+
+if ($filter_type !== '') {
+    $conditions[] = "u.user_type = ?";
+    $types .= 's';
+    $params[] = $filter_type;
+}
+
+$users_sql = $base_sql;
+if (!empty($conditions)) {
+    $users_sql .= ' WHERE ' . implode(' AND ', $conditions);
+}
+$users_sql .= ' ORDER BY u.created_at DESC';
+
+$users_stmt = $conn->prepare($users_sql);
+if (!$users_stmt) {
+    $error_message = 'Failed to prepare users query.';
+}
+if ($users_stmt && $types !== '') {
+    $users_stmt->bind_param($types, ...$params);
+}
+if ($users_stmt) {
+    $users_stmt->execute();
+    $users_result = $users_stmt->get_result();
+}
 
 // Get statistics
 $stats_sql = "SELECT
@@ -52,6 +103,14 @@ $stats_sql = "SELECT
     FROM users";
 $stats_result = $conn->query($stats_sql);
 $stats = $stats_result->fetch_assoc();
+
+// Distinct options for filters
+$courses_options = [];
+$semesters_options = [];
+$course_res = $conn->query("SELECT DISTINCT course FROM student_details WHERE course IS NOT NULL AND course <> '' ORDER BY course");
+if ($course_res) { while ($r = $course_res->fetch_assoc()) { $courses_options[] = $r['course']; } }
+$sem_res = $conn->query("SELECT DISTINCT semester FROM student_details WHERE semester IS NOT NULL AND semester <> '' ORDER BY semester");
+if ($sem_res) { while ($r = $sem_res->fetch_assoc()) { $semesters_options[] = $r['semester']; } }
 ?>
 
 <!DOCTYPE html>
@@ -569,38 +628,46 @@ body {
                 </div>
 
                 <div class="search-filter-section">
-                    <div class="search-grid">
-                        <div class="search-group">
-                            <label class="search-label">Search Users</label>
-                            <input type="text" class="search-input" id="searchInput" placeholder="Search by name, email, or student ID">
+                    <form method="get">
+                        <div class="search-grid">
+                            <div class="search-group">
+                                <label class="search-label">Search Users</label>
+                                <input type="text" class="search-input" name="q" placeholder="Search by name, email, or student ID" value="<?php echo htmlspecialchars($filter_search); ?>">
+                            </div>
+                            <div class="search-group">
+                                <label class="search-label">Filter by Course</label>
+                                <select class="search-input" name="course">
+                                    <option value="">All Courses</option>
+                                    <?php foreach ($courses_options as $c): ?>
+                                        <option value="<?php echo htmlspecialchars($c); ?>" <?php echo ($filter_course === $c) ? 'selected' : ''; ?>><?php echo htmlspecialchars($c); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="search-group">
+                                <label class="search-label">Filter by Semester</label>
+                                <select class="search-input" name="semester">
+                                    <option value="">All Semesters</option>
+                                    <?php foreach ($semesters_options as $s): ?>
+                                        <option value="<?php echo htmlspecialchars($s); ?>" <?php echo ($filter_semester === $s) ? 'selected' : ''; ?>><?php echo htmlspecialchars($s); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="search-group">
+                                <label class="search-label">Filter by Type</label>
+                                <select class="search-input" name="type">
+                                    <option value="" <?php echo ($filter_type==='')?'selected':''; ?>>All Types</option>
+                                    <option value="student" <?php echo ($filter_type==='student')?'selected':''; ?>>Students</option>
+                                    <option value="admin" <?php echo ($filter_type==='admin')?'selected':''; ?>>Admins</option>
+                                </select>
+                            </div>
+                            <div class="search-group">
+                                <button class="search-btn" type="submit">
+                                    <i class="fas fa-search"></i>
+                                    Apply Filters
+                                </button>
+                            </div>
                         </div>
-                        <div class="search-group">
-                            <label class="search-label">Filter by Course</label>
-                            <select class="search-input" id="courseFilter">
-                                <option value="">All Courses</option>
-                                <option value="Computer Science">Computer Science</option>
-                                <option value="Information Technology">Information Technology</option>
-                                <option value="Business Administration">Business Administration</option>
-                                <option value="Engineering">Engineering</option>
-                                <option value="Arts">Arts</option>
-                                <option value="Science">Science</option>
-                            </select>
-                        </div>
-                        <div class="search-group">
-                            <label class="search-label">Filter by Type</label>
-                            <select class="search-input" id="typeFilter">
-                                <option value="">All Types</option>
-                                <option value="student">Students</option>
-                                <option value="admin">Admins</option>
-                            </select>
-                        </div>
-                        <div class="search-group">
-                            <button class="search-btn" onclick="applyFilters()">
-                                <i class="fas fa-search"></i>
-                                Apply Filters
-                            </button>
-                        </div>
-                    </div>
+                    </form>
                 </div>
 
                 <table class="users-table">
@@ -614,7 +681,7 @@ body {
                         </tr>
                     </thead>
                     <tbody id="usersTableBody">
-                        <?php if ($users_result->num_rows > 0): ?>
+                        <?php if (isset($users_result) && $users_result->num_rows > 0): ?>
                             <?php while($user = $users_result->fetch_assoc()): ?>
                                 <tr>
                                     <td>

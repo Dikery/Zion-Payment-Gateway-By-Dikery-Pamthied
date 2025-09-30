@@ -759,64 +759,7 @@ body {
                         <a href="admin_dashboard.php">Dashboard</a> > Fee Management
                     </div>
 
-                    <!-- Courses Section -->
-                    <div id="courses" class="fee-form-section" style="margin-bottom:32px;">
-                        <div class="section-header">
-                            <div class="section-icon">
-                                <i class="fas fa-book"></i>
-                            </div>
-                            <div class="section-title">Courses</div>
-                        </div>
-                        <div class="section-description">Add new courses and define the number of semesters.</div>
-                        <form method="POST">
-                            <input type="hidden" name="action" value="add_course" />
-                            <div class="form-grid">
-                                <div class="form-group">
-                                    <label class="form-label">Course Name</label>
-                                    <input type="text" name="course_name" class="form-input" placeholder="e.g., B.Sc. Computer Science" required />
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label">Course Code (optional)</label>
-                                    <input type="text" name="course_code" class="form-input" placeholder="e.g., BSC-CS" />
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label">Number of Semesters</label>
-                                    <input type="number" name="num_semesters" class="form-input" min="1" max="12" value="6" required />
-                                </div>
-                            </div>
-                            <button type="submit" class="save-button" style="width:auto; padding:12px 20px;">
-                                <i class="fas fa-plus"></i>
-                                Add Course
-                            </button>
-                        </form>
-
-                        <div class="table-container">
-                            <?php if (!empty($courses)): ?>
-                                <table class="table">
-                                    <thead>
-                                        <tr>
-                                            <th>Name</th>
-                                            <th>Code</th>
-                                            <th>Semesters</th>
-                                            <th>Status</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <?php foreach($courses as $c): ?>
-                                            <tr>
-                                                <td><?php echo htmlspecialchars($c['name']); ?></td>
-                                                <td><?php echo htmlspecialchars($c['code'] ?? ''); ?></td>
-                                                <td><?php echo (int)$c['num_semesters']; ?></td>
-                                                <td><?php echo $c['is_active'] ? 'Active' : 'Inactive'; ?></td>
-                                            </tr>
-                                        <?php endforeach; ?>
-                                    </tbody>
-                                </table>
-                            <?php else: ?>
-                                <div style="text-align:center; color:#64748b; padding: 20px;">No courses yet.</div>
-                            <?php endif; ?>
-                        </div>
-                    </div>
+                    
 
                     <!-- Fee Structure Form -->
                     <div class="fee-form-section">
