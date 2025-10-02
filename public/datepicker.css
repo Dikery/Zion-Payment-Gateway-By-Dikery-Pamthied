@@ -74,6 +74,7 @@ input[type="date"].custom-date:hover {
     box-shadow: 0 12px 28px rgba(0, 0, 0, 0.15);
     font-family: 'Inter', sans-serif;
     overflow: hidden;
+    z-index: 9999;
 }
 
 .flatpickr-months {
@@ -81,32 +82,113 @@ input[type="date"].custom-date:hover {
     color: white;
     border-radius: 12px 12px 0 0;
     padding: 16px 20px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .flatpickr-month {
     color: white;
     fill: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
 }
 
+/* Enhanced Month Dropdown Styling */
 .flatpickr-current-month .flatpickr-monthDropdown-months {
-    background: transparent;
+    background: rgba(255, 255, 255, 0.15);
     color: white;
-    border: none;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 6px;
     font-weight: 600;
     font-size: 16px;
+    padding: 6px 28px 6px 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 6px center;
+    background-size: 14px;
 }
 
+.flatpickr-current-month .flatpickr-monthDropdown-months:hover {
+    background: rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+.flatpickr-current-month .flatpickr-monthDropdown-months:focus {
+    outline: none;
+    background: rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.6);
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2);
+}
+
+/* Enhanced Year Input Styling */
 .flatpickr-current-month .numInputWrapper {
     color: white;
+    position: relative;
 }
 
 .flatpickr-current-month input.cur-year {
-    background: transparent;
+    background: rgba(255, 255, 255, 0.15);
     color: white;
-    border: none;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 6px;
     font-weight: 600;
     font-size: 16px;
+    padding: 6px 8px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    width: 60px;
 }
+
+.flatpickr-current-month input.cur-year:hover {
+    background: rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+.flatpickr-current-month input.cur-year:focus {
+    outline: none;
+    background: rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.6);
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2);
+}
+
+/* Style the year input arrows */
+.flatpickr-current-month .numInputWrapper .arrowUp,
+.flatpickr-current-month .numInputWrapper .arrowDown {
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.flatpickr-current-month .numInputWrapper .arrowUp:hover,
+.flatpickr-current-month .numInputWrapper .arrowDown:hover {
+    background: rgba(255, 255, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+/* Simple month dropdown options styling */
+.flatpickr-current-month .flatpickr-monthDropdown-months option {
+    background: white;
+    color: #333;
+    padding: 8px 12px;
+}
+
+.flatpickr-current-month .flatpickr-monthDropdown-months option:selected {
+    background: var(--accent, #ff6a00);
+    color: white;
+}
+
 
 .flatpickr-prev-month,
 .flatpickr-next-month {
@@ -240,14 +322,32 @@ input[type="date"].custom-date:hover {
     background: var(--card, #26262a);
     border-color: var(--border, #2f3136);
     color: var(--text, #e5e7eb);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3);
 }
 
 .theme-dark .flatpickr-weekdays {
     background: rgba(255, 255, 255, 0.05);
+    border-bottom-color: var(--border, #2f3136);
 }
 
 .theme-dark .flatpickr-day {
     color: var(--text, #e5e7eb);
+}
+
+.theme-dark .flatpickr-day:hover {
+    background: var(--accent-50, rgba(255, 106, 0, 0.12));
+    color: var(--accent, #ff6a00);
+}
+
+.theme-dark .flatpickr-day.selected {
+    background: var(--accent, #ff6a00);
+    color: white;
+}
+
+.theme-dark .flatpickr-day.today {
+    background: var(--accent-50, rgba(255, 106, 0, 0.12));
+    color: var(--accent, #ff6a00);
+    border-color: var(--accent, #ff6a00);
 }
 
 .theme-dark .flatpickr-day.prevMonthDay,
@@ -258,6 +358,26 @@ input[type="date"].custom-date:hover {
 .theme-dark .date-picker-input {
     background: var(--card, #26262a);
     border-color: var(--border, #2f3136);
+    color: var(--text, #e5e7eb);
+}
+
+/* Dark theme month/year selectors */
+.theme-dark .flatpickr-current-month .flatpickr-monthDropdown-months option {
+    background: var(--card, #26262a);
+    color: var(--text, #e5e7eb);
+}
+
+.theme-dark .flatpickr-current-month .flatpickr-monthDropdown-months option:hover {
+    background: var(--accent-50, rgba(255, 106, 0, 0.12));
+    color: var(--accent, #ff6a00);
+}
+
+.theme-dark .flatpickr-time {
+    background: rgba(255, 255, 255, 0.02);
+    border-top-color: var(--border, #2f3136);
+}
+
+.theme-dark .flatpickr-time input {
     color: var(--text, #e5e7eb);
 }
 
