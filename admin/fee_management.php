@@ -126,11 +126,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // Load classes and fee structures
 $classes = [];
-$res = $conn->query("SELECT id, name, code, is_active, created_at FROM classes ORDER BY name");
+$res = $conn->query("SELECT id, name, code, is_active, created_at FROM classes ORDER BY CAST(SUBSTRING(name, 7) AS UNSIGNED)");
 if ($res) { while ($r = $res->fetch_assoc()) { $classes[] = $r; } }
 
 $fees = [];
-$res2 = $conn->query("SELECT id, title, course_name, semester, class_level, amount, due_date, late_fee, is_active, created_at FROM fee_structures ORDER BY class_level, course_name");
+$res2 = $conn->query("SELECT id, title, course_name, semester, class_level, amount, due_date, late_fee, is_active, created_at FROM fee_structures ORDER BY CAST(SUBSTRING(class_level, 7) AS UNSIGNED), course_name");
 if ($res2) { while ($r = $res2->fetch_assoc()) { $fees[] = $r; } }
 ?>
 <!DOCTYPE html>

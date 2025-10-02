@@ -6,7 +6,7 @@ require '../includes/db_connect.php';
 $classes = [];
 $cRes = $conn->query("SHOW TABLES LIKE 'classes'");
 if ($cRes && $cRes->num_rows > 0) {
-    $cList = $conn->query("SELECT name FROM classes WHERE is_active = 1 ORDER BY name");
+    $cList = $conn->query("SELECT name FROM classes WHERE is_active = 1 ORDER BY CAST(SUBSTRING(name, 7) AS UNSIGNED)");
     if ($cList) { while ($r = $cList->fetch_assoc()) { $classes[] = $r['name']; } }
 }
 

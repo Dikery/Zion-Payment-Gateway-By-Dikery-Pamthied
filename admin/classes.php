@@ -82,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // Load classes
 $classes = [];
-$res = $conn->query("SELECT id, name, code, is_active, created_at FROM classes ORDER BY name");
+$res = $conn->query("SELECT id, name, code, is_active, created_at FROM classes ORDER BY CAST(SUBSTRING(name, 7) AS UNSIGNED)");
 if ($res) { while ($r = $res->fetch_assoc()) { $classes[] = $r; } }
 ?>
 <!DOCTYPE html>

@@ -238,7 +238,7 @@ $stats = $stats_result->fetch_assoc();
 
 // Distinct options for filters
 $class_options = [];
-$class_res = $conn->query("SELECT DISTINCT class_level FROM student_details WHERE class_level IS NOT NULL AND class_level <> '' ORDER BY class_level");
+$class_res = $conn->query("SELECT DISTINCT class_level FROM student_details WHERE class_level IS NOT NULL AND class_level <> '' ORDER BY CAST(SUBSTRING(class_level, 7) AS UNSIGNED)");
 if ($class_res) { while ($r = $class_res->fetch_assoc()) { $class_options[] = $r['class_level']; } }
 ?>
 
