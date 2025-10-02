@@ -84,6 +84,112 @@ try {
         $errors[] = "❌ Failed to create classes table: " . $conn->error;
     }
 
+    // Step 3: Create student_details table
+    echo "<h3>Step 3: Creating Student Details Table</h3>\n";
+    $sql_student_details = "CREATE TABLE IF NOT EXISTS student_details (
+        id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+        user_id INT UNSIGNED NOT NULL,
+        student_id VARCHAR(20) NOT NULL UNIQUE,
+        course VARCHAR(100) DEFAULT NULL,
+        semester VARCHAR(20) DEFAULT NULL,
+        class_level VARCHAR(20) DEFAULT NULL,
+        fee_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+        outstanding_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uk_student_id (student_id),
+        KEY idx_student_details_user_id (user_id),
+        KEY idx_student_class_level (class_level),
+        CONSTRAINT fk_student_details_user
+            FOREIGN KEY (user_id) REFERENCES users(id)
+            ON DELETE CASCADE ON UPDATE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+
+    if ($conn->query($sql_student_details)) {
+        $success_messages[] = "✅ Student details table created successfully";
+    } else {
+        $errors[] = "❌ Failed to create student_details table: " . $conn->error;
+    }
+
+    // Step 4: Create fee_structures table
+    echo "<h3>Step 4: Creating Fee Structures Table</h3>\n";
+    $sql_fee_structures = "CREATE TABLE IF NOT EXISTS fee_structures (
+        id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+        title VARCHAR(150) DEFAULT NULL,
+        course_name VARCHAR(100) DEFAULT NULL,
+        semester VARCHAR(50) DEFAULT NULL,
+        class_level VARCHAR(20) DEFAULT NULL,
+        amount DECIMAL(10,2) NOT NULL,
+        due_date DATE DEFAULT NULL,
+        late_fee DECIMAL(10,2) DEFAULT NULL,
+        is_active TINYINT(1) NOT NULL DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY idx_fee_class_level (class_level),
+        KEY idx_fee_active (is_active),
+        KEY idx_fee_due_date (due_date)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+
+    if ($conn->query($sql_fee_structures)) {
+        $success_messages[] = "✅ Fee structures table created successfully";
+        
+        // Add sample fee structures for each class
+        $sample_fees = [
+            ['Class 1 Annual Fees', 'Class 1', 8000.00, '2024-04-30'],
+            ['Class 2 Annual Fees', 'Class 2', 8500.00, '2024-04-30'],
+            ['Class 3 Annual Fees', 'Class 3', 9000.00, '2024-04-30'],
+            ['Class 4 Annual Fees', 'Class 4', 9500.00, '2024-04-30'],
+            ['Class 5 Annual Fees', 'Class 5', 10000.00, '2024-04-30'],
+            ['Class 6 Annual Fees', 'Class 6', 11000.00, '2024-04-30'],
+            ['Class 7 Annual Fees', 'Class 7', 12000.00, '2024-04-30'],
+            ['Class 8 Annual Fees', 'Class 8', 13000.00, '2024-04-30'],
+            ['Class 9 Annual Fees', 'Class 9', 14000.00, '2024-04-30'],
+            ['Class 10 Annual Fees', 'Class 10', 15000.00, '2024-04-30']
+        ];
+        
+        $stmt = $conn->prepare("INSERT IGNORE INTO fee_structures (title, class_level, amount, due_date) VALUES (?, ?, ?, ?)");
+        foreach ($sample_fees as $fee) {
+            $stmt->bind_param('ssds', $fee[0], $fee[1], $fee[2], $fee[3]);
+            $stmt->execute();
+        }
+        $stmt->close();
+        $success_messages[] = "✅ Sample fee structures added";
+    } else {
+        $errors[] = "❌ Failed to create fee_structures table: " . $conn->error;
+    }
+
+    // Step 5: Create payments table
+    echo "<h3>Step 5: Creating Payments Table</h3>\n";
+    $sql_payments = "CREATE TABLE IF NOT EXISTS payments (
+        id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+        user_id INT UNSIGNED NOT NULL,
+        fee_id INT UNSIGNED DEFAULT NULL,
+        amount DECIMAL(10,2) NOT NULL,
+        payment_method VARCHAR(50) NOT NULL,
+        transaction_id VARCHAR(100) NOT NULL UNIQUE,
+        status VARCHAR(20) NOT NULL DEFAULT 'completed',
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uk_transaction_id (transaction_id),
+        KEY idx_payments_user_id (user_id),
+        KEY idx_payments_fee_id (fee_id),
+        KEY idx_payments_status (status),
+        KEY idx_payments_created_at (created_at),
+        CONSTRAINT fk_payments_user
+            FOREIGN KEY (user_id) REFERENCES users(id)
+            ON DELETE CASCADE ON UPDATE CASCADE,
+        CONSTRAINT fk_payments_fee
+            FOREIGN KEY (fee_id) REFERENCES fee_structures(id)
+            ON DELETE SET NULL ON UPDATE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+
+    if ($conn->query($sql_payments)) {
+        $success_messages[] = "✅ Payments table created successfully";
+    } else {
+        $errors[] = "❌ Failed to create payments table: " . $conn->error;
+    }
+
     // Final success message
     if (empty($errors)) {
         echo "<div style='background: #d1fae5; border: 1px solid #10b981; padding: 20px; border-radius: 8px; margin: 20px 0;'>";
@@ -92,6 +198,19 @@ try {
         foreach ($success_messages as $msg) {
             echo "<p style='margin: 5px 0;'>$msg</p>";
         }
+        echo "</div>";
+        echo "</div>";
+        
+        echo "<div style='background: #eff6ff; border: 1px solid #3b82f6; padding: 20px; border-radius: 8px; margin: 20px 0;'>";
+        echo "<h4 style='color: #1e40af; margin: 0 0 10px 0;'>📋 Database Tables Created:</h4>";
+        echo "<div style='color: #1e40af;'>";
+        echo "<p>✅ <strong>users</strong> - Authentication & user data</p>";
+        echo "<p>✅ <strong>classes</strong> - School class management (Class 1-10)</p>";
+        echo "<p>✅ <strong>student_details</strong> - Extended student information</p>";
+        echo "<p>✅ <strong>fee_structures</strong> - Configurable fees by class</p>";
+        echo "<p>✅ <strong>payments</strong> - Transaction records with fee linking</p>";
+        echo "<p>🔗 All foreign key relationships established</p>";
+        echo "<p>📊 Sample data inserted for classes and fees</p>";
         echo "</div>";
         echo "</div>";
     }
