@@ -141,8 +141,12 @@ if ($res2) { while ($r = $res2->fetch_assoc()) { $fees[] = $r; } }
     <title>Fee Management - Admin</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="../public/theme.css" rel="stylesheet">
+    <link href="../public/datepicker.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <script defer src="../public/ui.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script defer src="../public/datepicker.js"></script>
     <style>
 /* Reset and base styles */
 * { margin: 0; padding: 0; box-sizing: border-box; }
