@@ -9,8 +9,7 @@ require 'includes/db_connect.php';
 $user_id = $_SESSION['user_id'];
 $full_name = $_SESSION['full_name'] ?? ($_SESSION['username'] ?? 'Student');
 $student_id = $_SESSION['student_id'] ?? 'N/A';
-$course_name = $_SESSION['course'] ?? null;
-$semester_label = $_SESSION['semester'] ?? null;
+$class_level = $_SESSION['class_level'] ?? null;
 
 // Pull latest totals
 $total_paid = 0.00;
@@ -20,7 +19,7 @@ $days_left_label = '';
 $sum_paid_for_fee = 0.00;
 
 $sql = "SELECT u.total_paid, COALESCE(sd.outstanding_amount, 0) AS outstanding_amount,
-               sd.course AS course_name, sd.semester AS semester_label
+               sd.class_level
         FROM users u
         LEFT JOIN student_details sd ON sd.user_id = u.id
         WHERE u.id = ?";
@@ -32,46 +31,90 @@ if ($stmt) {
   if ($row = $res->fetch_assoc()) {
     $total_paid = (float)($row['total_paid'] ?? 0);
     $outstanding_amount = (float)($row['outstanding_amount'] ?? $outstanding_amount);
-    if (empty($course_name) && !empty($row['course_name'])) { $course_name = $row['course_name']; }
-    if (empty($semester_label) && !empty($row['semester_label'])) { $semester_label = $row['semester_label']; }
+    if (empty($class_level) && !empty($row['class_level'])) { $class_level = $row['class_level']; }
   }
   $stmt->close();
 }
 
-// Match fee structure for this student (by course and semester)
-$applicable_fee = null;
-$fee_stmt = $conn->prepare("SELECT id, amount, due_date FROM fee_structures WHERE course_name = ? AND semester = ? AND is_active = 1");
-if ($fee_stmt && isset($_SESSION['course']) && isset($_SESSION['semester'])) {
-  $fee_stmt->bind_param("ss", $_SESSION['course'], $_SESSION['semester']);
-  $fee_stmt->execute();
-  $fee_res = $fee_stmt->get_result();
-  if ($f = $fee_res->fetch_assoc()) {
-    $applicable_fee = $f;
-    if (!empty($f['due_date'])) {
-      $due_ts = strtotime($f['due_date']);
-      $due_date_label = date('M d, Y', $due_ts);
-      $days_diff = floor(($due_ts - time()) / 86400);
+// Find the most urgent unpaid fee for this student's class level
+$applicable_fees = [];
+$earliest_due_date = null;
+$most_urgent_fee = null;
+$total_outstanding = 0.0;
+
+if (!empty($class_level)) {
+  // Get all active fees for this class level, ordered by due date
+  $fee_stmt = $conn->prepare("SELECT id, title, amount, due_date FROM fee_structures WHERE class_level = ? AND is_active = 1 ORDER BY due_date IS NULL, due_date ASC");
+  if ($fee_stmt) {
+    $fee_stmt->bind_param("s", $class_level);
+    $fee_stmt->execute();
+    $fee_res = $fee_stmt->get_result();
+    
+    while ($f = $fee_res->fetch_assoc()) {
+      // Calculate outstanding amount for this specific fee
+      $sum_sql = "SELECT COALESCE(SUM(amount), 0) AS sum_paid FROM payments WHERE user_id = ? AND fee_id = ? AND status IN ('completed','success','SUCCESS','Completed')";
+      $sum_stmt = $conn->prepare($sum_sql);
+      $fee_outstanding = 0.0;
+      if ($sum_stmt) {
+        $sum_stmt->bind_param("ii", $user_id, $f['id']);
+        $sum_stmt->execute();
+        $sum_res = $sum_stmt->get_result();
+        $sum_paid = 0.0;
+        if ($srow = $sum_res->fetch_assoc()) { 
+          $sum_paid = (float)$srow['sum_paid']; 
+        }
+        $sum_stmt->close();
+        
+        // Calculate outstanding for this fee (never below zero)
+        $fee_outstanding = max(0.0, (float)$f['amount'] - $sum_paid);
+        $total_outstanding += $fee_outstanding;
+      }
+      
+      // Only consider fees that have outstanding amounts
+      if ($fee_outstanding > 0) {
+        $applicable_fees[] = array_merge($f, ['outstanding' => $fee_outstanding]);
+        
+        // Track earliest due date from unpaid fees only
+        if (!empty($f['due_date'])) {
+          $due_ts = strtotime($f['due_date']);
+          if ($earliest_due_date === null || $due_ts < $earliest_due_date) {
+            $earliest_due_date = $due_ts;
+            $most_urgent_fee = $f;
+          }
+        }
+      }
+    }
+    $fee_stmt->close();
+    
+    // Set the outstanding amount to the most urgent fee's amount only
+    if ($most_urgent_fee) {
+      // Find the outstanding amount for the most urgent fee
+      $urgent_sum_sql = "SELECT COALESCE(SUM(amount), 0) AS sum_paid FROM payments WHERE user_id = ? AND fee_id = ? AND status IN ('completed','success','SUCCESS','Completed')";
+      $urgent_sum_stmt = $conn->prepare($urgent_sum_sql);
+      if ($urgent_sum_stmt) {
+        $urgent_sum_stmt->bind_param("ii", $user_id, $most_urgent_fee['id']);
+        $urgent_sum_stmt->execute();
+        $urgent_sum_res = $urgent_sum_stmt->get_result();
+        $urgent_sum_paid = 0.0;
+        if ($urgent_srow = $urgent_sum_res->fetch_assoc()) { 
+          $urgent_sum_paid = (float)$urgent_srow['sum_paid']; 
+        }
+        $urgent_sum_stmt->close();
+        
+        // Set outstanding to only the most urgent fee's amount
+        $outstanding_amount = max(0.0, (float)$most_urgent_fee['amount'] - $urgent_sum_paid);
+      }
+    } else {
+      $outstanding_amount = 0.0;
+    }
+    
+    // Set due date information based on earliest due from unpaid fees
+    if ($earliest_due_date !== null && $most_urgent_fee) {
+      $due_date_label = date('M d, Y', $earliest_due_date);
+      $days_diff = floor(($earliest_due_date - time()) / 86400);
       $days_left_label = $days_diff >= 0 ? $days_diff . ' days left' : abs($days_diff) . ' days overdue';
     }
-
-    // Compute total paid against this fee (completed payments only)
-    $sum_sql = "SELECT COALESCE(SUM(amount), 0) AS sum_paid FROM payments WHERE user_id = ? AND (fee_id = ? OR ? IS NULL) AND (status IN ('completed','success','SUCCESS','Completed'))";
-    $sum_stmt = $conn->prepare($sum_sql);
-    if ($sum_stmt) {
-      $fee_id_param = isset($f['id']) ? (int)$f['id'] : null;
-      $sum_stmt->bind_param("iii", $user_id, $fee_id_param, $fee_id_param);
-      $sum_stmt->execute();
-      $sum_res = $sum_stmt->get_result();
-      if ($srow = $sum_res->fetch_assoc()) { $sum_paid_for_fee = (float)$srow['sum_paid']; }
-      $sum_stmt->close();
-    }
-
-    // Outstanding is fee amount minus sum of successful payments; never below zero
-    if (isset($f['amount'])) {
-      $outstanding_amount = max(0.0, (float)$f['amount'] - $sum_paid_for_fee);
-    }
   }
-  $fee_stmt->close();
 }
 
 // Recent payments (activity)
@@ -305,11 +348,8 @@ if (!empty($recent_payments)) {
           <h2>Welcome back, <span id="studentName"><?php echo htmlspecialchars($full_name); ?></span></h2>
           <div class="welcome-subtitle">
             Student ID: <strong><?php echo htmlspecialchars($student_id); ?></strong>
-            <?php if (!empty($course_name)): ?>
-              · Course: <strong><?php echo htmlspecialchars($course_name); ?></strong>
-            <?php endif; ?>
-            <?php if (!empty($semester_label)): ?>
-              · Semester: <strong><?php echo htmlspecialchars($semester_label); ?></strong>
+            <?php if (!empty($class_level)): ?>
+              · Class: <strong><?php echo htmlspecialchars($class_level); ?></strong>
             <?php endif; ?>
           </div>
         </div>

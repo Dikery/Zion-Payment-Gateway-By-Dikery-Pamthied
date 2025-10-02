@@ -15,7 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax']) && $_POST['aj
     $action = $_POST['action'] ?? '';
     if ($action === 'get_fee') {
         $fee_id = (int)($_POST['fee_id'] ?? 0);
-        $stmt = $conn->prepare("SELECT id, title, course_name, semester, amount, due_date, late_fee, is_active FROM fee_structures WHERE id = ?");
+        $stmt = $conn->prepare("SELECT id, title, course_name, semester, class_level, amount, due_date, late_fee, is_active FROM fee_structures WHERE id = ?");
         if ($stmt) { $stmt->bind_param('i', $fee_id); $stmt->execute(); $res = $stmt->get_result(); $row = $res->fetch_assoc(); $stmt->close(); }
         echo json_encode(['success' => (bool)$row, 'fee' => $row]);
         exit();
@@ -23,15 +23,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax']) && $_POST['aj
     if ($action === 'update_fee') {
         $fee_id = (int)($_POST['fee_id'] ?? 0);
         $title = trim($_POST['title'] ?? '');
-        $course_name = trim($_POST['course_name'] ?? '');
-        $semester = trim($_POST['semester'] ?? '');
+        $class_level = trim($_POST['class_level'] ?? '');
         $amount = isset($_POST['amount']) ? (float)$_POST['amount'] : 0;
         $due_date = $_POST['due_date'] !== '' ? $_POST['due_date'] : null;
         $late_fee = $_POST['late_fee'] !== '' ? $_POST['late_fee'] : null;
         $is_active = isset($_POST['is_active']) && $_POST['is_active'] === '1' ? 1 : 0;
-        if ($fee_id > 0 && $course_name !== '' && $semester !== '' && $amount > 0) {
-            $stmt = $conn->prepare("UPDATE fee_structures SET title=?, course_name=?, semester=?, amount=?, due_date=?, late_fee=?, is_active=? WHERE id=?");
-            if ($stmt) { $stmt->bind_param('sssdssii', $title, $course_name, $semester, $amount, $due_date, $late_fee, $is_active, $fee_id); $ok=$stmt->execute(); $stmt->close(); }
+        if ($fee_id > 0 && $class_level !== '' && $amount > 0) {
+            $stmt = $conn->prepare("UPDATE fee_structures SET title=?, class_level=?, amount=?, due_date=?, late_fee=?, is_active=? WHERE id=?");
+            if ($stmt) { $stmt->bind_param('ssdsiii', $title, $class_level, $amount, $due_date, $late_fee, $is_active, $fee_id); $ok=$stmt->execute(); $stmt->close(); }
             echo json_encode(['success' => isset($ok) && $ok]);
         } else {
             echo json_encode(['success' => false, 'message' => 'Invalid input']);
@@ -75,15 +74,14 @@ if (isset($_POST['action'])) {
     }
     if ($_POST['action'] === 'edit_fee' && isset($_POST['fee_id'])) {
         $fee_id = (int)$_POST['fee_id'];
-        $course_name = trim($_POST['fee_course'] ?? '');
-        $semester = trim($_POST['fee_semester'] ?? '');
+        $class_level = trim($_POST['fee_class'] ?? '');
         $title = trim($_POST['fee_title'] ?? '');
         $amount = isset($_POST['fee_amount']) ? (float)$_POST['fee_amount'] : 0;
         $due_date = $_POST['fee_due_date'] !== '' ? $_POST['fee_due_date'] : null;
         $late_fee = $_POST['late_fee'] !== '' ? $_POST['late_fee'] : null;
-        if ($course_name !== '' && $semester !== '' && $amount > 0) {
-            $stmt = $conn->prepare("UPDATE fee_structures SET title = ?, course_name = ?, semester = ?, amount = ?, due_date = ?, late_fee = ? WHERE id = ?");
-            if ($stmt) { if(!$stmt->bind_param('sssdssi', $title, $course_name, $semester, $amount, $due_date, $late_fee, $fee_id)) { $messages[] = 'Bind failed (edit): ' . $stmt->error; }
+        if ($class_level !== '' && $amount > 0) {
+            $stmt = $conn->prepare("UPDATE fee_structures SET title = ?, class_level = ?, amount = ?, due_date = ?, late_fee = ? WHERE id = ?");
+            if ($stmt) { if(!$stmt->bind_param('ssdssi', $title, $class_level, $amount, $due_date, $late_fee, $fee_id)) { $messages[] = 'Bind failed (edit): ' . $stmt->error; }
                 if(!$stmt->execute()){ $messages[] = 'Failed to update fee: ' . $stmt->error; }
                 $stmt->close();
             } else { $messages[] = 'Failed to prepare update statement: ' . $conn->error; }
@@ -104,16 +102,15 @@ if (isset($_POST['action']) && $_POST['action'] === 'add_course') {
 
 // Handle add fee structure
 if (isset($_POST['action']) && $_POST['action'] === 'add_fee') {
-    $course_name = trim($_POST['fee_course'] ?? '');
-    $semester = trim($_POST['fee_semester'] ?? '');
+    $class_level = trim($_POST['fee_class'] ?? '');
     $title = trim($_POST['fee_title'] ?? '');
     $amount = (float)($_POST['fee_amount'] ?? 0);
     $due_date = $_POST['fee_due_date'] ?? null;
     $late_fee = $_POST['late_fee'] !== '' ? $_POST['late_fee'] : null;
-    if ($course_name !== '' && $semester !== '' && $amount > 0) {
-        $stmt = $conn->prepare("INSERT INTO fee_structures (title, course_name, semester, amount, due_date, late_fee) VALUES (?, ?, ?, ?, ?, ?)");
+    if ($class_level !== '' && $amount > 0) {
+        $stmt = $conn->prepare("INSERT INTO fee_structures (title, class_level, amount, due_date, late_fee) VALUES (?, ?, ?, ?, ?)");
         if ($stmt) {
-            if(!$stmt->bind_param('sssdss', $title, $course_name, $semester, $amount, $due_date, $late_fee)) { $messages[] = 'Bind failed (insert): ' . $stmt->error; }
+            if(!$stmt->bind_param('ssdss', $title, $class_level, $amount, $due_date, $late_fee)) { $messages[] = 'Bind failed (insert): ' . $stmt->error; }
             if(!$stmt->execute()) { $messages[] = 'Failed to add fee: ' . $stmt->error; }
             $stmt->close();
         } else { $messages[] = 'Failed to prepare insert statement: ' . $conn->error; }
@@ -127,13 +124,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     exit();
 }
 
-// Load courses and fee structures
-$courses = [];
-$res = $conn->query("SELECT id, name, code, num_semesters, is_active, created_at FROM courses ORDER BY name");
-if ($res) { while ($r = $res->fetch_assoc()) { $courses[] = $r; } }
+// Load classes and fee structures
+$classes = [];
+$res = $conn->query("SELECT id, name, code, is_active, created_at FROM classes ORDER BY name");
+if ($res) { while ($r = $res->fetch_assoc()) { $classes[] = $r; } }
 
 $fees = [];
-$res2 = $conn->query("SELECT id, title, course_name, semester, amount, due_date, late_fee, is_active, created_at FROM fee_structures ORDER BY course_name, semester");
+$res2 = $conn->query("SELECT id, title, course_name, semester, class_level, amount, due_date, late_fee, is_active, created_at FROM fee_structures ORDER BY class_level, course_name");
 if ($res2) { while ($r = $res2->fetch_assoc()) { $fees[] = $r; } }
 ?>
 <!DOCTYPE html>
@@ -838,28 +835,22 @@ body {
                             </div>
                             <div class="section-title">Create Fee Structure</div>
                         </div>
-                        <div class="section-description">Define fee details for courses and semesters.</div>
+                        <div class="section-description">Define fee details for different class levels.</div>
 
                         <form method="POST">
                             <input type="hidden" name="action" value="add_fee" />
                             <div class="form-grid">
                                 <div class="form-group">
                                     <label class="form-label">Title (optional)</label>
-                                    <input type="text" name="fee_title" class="form-input" placeholder="e.g., Semester 1 Tuition" />
+                                    <input type="text" name="fee_title" class="form-input" placeholder="e.g., Annual Tuition Fee" />
                                 </div>
                                 <div class="form-group">
-                                    <label class="form-label">Course</label>
-                                    <select name="fee_course" id="fee_course" class="form-select" required>
-                                        <option value="">Select Course</option>
-                                        <?php foreach ($courses as $c): ?>
+                                    <label class="form-label">Class</label>
+                                    <select name="fee_class" id="fee_class" class="form-select" required>
+                                        <option value="">Select Class</option>
+                                        <?php foreach ($classes as $c): ?>
                                             <option value="<?php echo htmlspecialchars($c['name']); ?>"><?php echo htmlspecialchars($c['name']); ?></option>
                                         <?php endforeach; ?>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label">Semester</label>
-                                    <select name="fee_semester" id="fee_semester" class="form-select" required>
-                                        <option value="">Select Semester</option>
                                     </select>
                                 </div>
                                 <div class="form-group">
@@ -889,10 +880,9 @@ body {
                                 <thead>
                                     <tr>
                                         <th>Title</th>
-                                        <th>Course</th>
-                                        <th>Semester</th>
+                                        <th>Class</th>
                                         <th>Amount</th>
-                                        <th>Due</th>
+                                        <th>Due Date</th>
                                         <th>Late Fee</th>
                                         <th>Status</th>
                                         <th>Actions</th>
@@ -901,11 +891,10 @@ body {
                                 <tbody>
                                     <?php foreach($fees as $f): ?>
                                         <tr>
-                                            <td><?php echo htmlspecialchars($f['title'] ?? ''); ?></td>
-                                            <td><?php echo htmlspecialchars($f['course_name']); ?></td>
-                                            <td><?php echo htmlspecialchars($f['semester']); ?></td>
+                                            <td><?php echo htmlspecialchars($f['title'] ?: ($f['class_level'] ? $f['class_level'] . ' Fees' : ($f['course_name'] . ' ' . $f['semester']))); ?></td>
+                                            <td><strong><?php echo htmlspecialchars($f['class_level'] ?: $f['course_name']); ?></strong></td>
                                             <td>₹<?php echo number_format((float)$f['amount'], 2); ?></td>
-                                            <td><?php echo $f['due_date'] ? htmlspecialchars($f['due_date']) : '—'; ?></td>
+                                            <td><?php echo $f['due_date'] ? date('M d, Y', strtotime($f['due_date'])) : '—'; ?></td>
                                             <td><?php echo $f['late_fee'] !== null ? '₹'.number_format((float)$f['late_fee'], 2) : '—'; ?></td>
                                             <td>
                                                 <span class="badge <?php echo $f['is_active'] ? 'active' : 'inactive'; ?>">
@@ -954,16 +943,12 @@ body {
                                     <input type="text" class="form-control" name="title" id="edit_title" />
                                 </div>
                                 <div class="form-group">
-                                    <label>Course</label>
-                                    <select class="form-control" name="course_name" id="edit_course_name">
-                                        <?php foreach ($courses as $c): ?>
+                                    <label>Class</label>
+                                    <select class="form-control" name="class_level" id="edit_class_level">
+                                        <?php foreach ($classes as $c): ?>
                                             <option value="<?php echo htmlspecialchars($c['name']); ?>"><?php echo htmlspecialchars($c['name']); ?></option>
                                         <?php endforeach; ?>
                                     </select>
-                                </div>
-                                <div class="form-group">
-                                    <label>Semester</label>
-                                    <input type="text" class="form-control" name="semester" id="edit_semester" />
                                 </div>
                                 <div class="form-group">
                                     <label>Amount (₹)</label>
@@ -1003,8 +988,8 @@ body {
                             <span class="stat-value"><?php echo count($fees); ?></span>
                         </div>
                         <div class="stat-item">
-                            <span class="stat-label">Active Courses</span>
-                            <span class="stat-value"><?php echo count(array_filter($courses, function($c) { return $c['is_active']; })); ?></span>
+                            <span class="stat-label">Active Classes</span>
+                            <span class="stat-value"><?php echo count(array_filter($classes, function($c) { return $c['is_active']; })); ?></span>
                         </div>
                         <div class="stat-item">
                             <span class="stat-label">Pending Payments</span>
@@ -1021,7 +1006,7 @@ body {
                         ?>
                             <div class="recent-item">
                                 <div>
-                                    <div class="recent-name"><?php echo htmlspecialchars($f['title'] ?: $f['course_name'] . ' ' . $f['semester']); ?></div>
+                                    <div class="recent-name"><?php echo htmlspecialchars($f['title'] ?: ($f['class_level'] ?: $f['course_name'] . ' ' . $f['semester'])); ?></div>
                                     <div class="recent-amount">₹<?php echo number_format((float)$f['amount'], 0); ?></div>
                                 </div>
                                 <i class="fas fa-edit recent-edit"></i>
@@ -1043,30 +1028,8 @@ body {
         </main>
     </div>
     <script>
-        (function(){
-            const courseSel = document.getElementById('fee_course');
-            const semSel = document.getElementById('fee_semester');
-            function ordinal(n){ const s=["th","st","nd","rd"], v=n%100; return n+(s[(v-20)%10]||s[v]||s[0]); }
-            async function loadSemesters(){
-                semSel.innerHTML = '<option value="">Select Semester</option>';
-                const c = courseSel.value.trim();
-                if(!c) return;
-                try {
-                    const r = await fetch('../auth/get_course_semesters.php?course=' + encodeURIComponent(c), { credentials: 'same-origin' });
-                    const data = await r.json();
-                    if (data && data.success) {
-                        for (let i=1;i<=data.num_semesters;i++){
-                            const label = ordinal(i) + ' Semester';
-                            const opt = document.createElement('option');
-                            opt.value = label;
-                            opt.textContent = label;
-                            semSel.appendChild(opt);
-                        }
-                    }
-                } catch(e) { /* noop */ }
-            }
-            if (courseSel) { courseSel.addEventListener('change', loadSemesters); }
-        })();
+        // Class selection is static - no dynamic loading needed
+        console.log('Fee Management: Class-based system loaded');
     </script>
     <script>
         // Edit panel wiring
@@ -1079,8 +1042,7 @@ body {
             const fields = {
                 id: document.getElementById('edit_fee_id'),
                 title: document.getElementById('edit_title'),
-                course: document.getElementById('edit_course_name'),
-                semester: document.getElementById('edit_semester'),
+                class_level: document.getElementById('edit_class_level'),
                 amount: document.getElementById('edit_amount'),
                 due: document.getElementById('edit_due_date'),
                 late: document.getElementById('edit_late_fee')
@@ -1098,8 +1060,7 @@ body {
                         const f = data.fee;
                         fields.id.value = f.id;
                         fields.title.value = f.title || '';
-                        fields.course.value = f.course_name || '';
-                        fields.semester.value = f.semester || '';
+                        fields.class_level.value = f.class_level || f.course_name || '';
                         fields.amount.value = f.amount != null ? f.amount : '';
                         fields.due.value = f.due_date || '';
                         fields.late.value = f.late_fee != null ? f.late_fee : '';
@@ -1122,12 +1083,11 @@ body {
                         const rowBtn = document.querySelector(`button[onclick=\"openEditFeePanel(${fields.id.value})\"]`);
                         const row = rowBtn ? rowBtn.closest('tr') : null;
                         if (row) {
-                            row.cells[0].textContent = fields.title.value || (fields.course.value + ' ' + fields.semester.value);
-                            row.cells[1].textContent = fields.course.value;
-                            row.cells[2].textContent = fields.semester.value;
-                            row.cells[3].textContent = '₹' + Number(fields.amount.value || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
-                            row.cells[4].textContent = fields.due.value || '—';
-                            row.cells[5].textContent = fields.late.value ? ('₹' + Number(fields.late.value).toLocaleString()) : '—';
+                            row.cells[0].textContent = fields.title.value || (fields.class_level.value + ' Fees');
+                            row.cells[1].innerHTML = '<strong>' + fields.class_level.value + '</strong>';
+                            row.cells[2].textContent = '₹' + Number(fields.amount.value || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+                            row.cells[3].textContent = fields.due.value ? new Date(fields.due.value).toLocaleDateString('en-GB', {year:'numeric', month:'short', day:'numeric'}) : '—';
+                            row.cells[4].textContent = fields.late.value ? ('₹' + Number(fields.late.value).toLocaleString()) : '—';
                             const badge = row.querySelector('.badge');
                             const isActive = document.getElementById('edit_is_active').value === '1';
                             if (badge) {

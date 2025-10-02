@@ -3,38 +3,20 @@ session_start();
 if (!isset($_SESSION['user_id'])) { header('Location: ../login.html'); exit(); }
 require '../includes/db_connect.php';
 
-$course = $_SESSION['course'] ?? null;
-$semester = $_SESSION['semester'] ?? null;
+$class_level = $_SESSION['class_level'] ?? null;
 
-// Normalize semester to a canonical label like "6th Semester"
-$normalized = null;
-if ($semester) {
-  if (preg_match('/(\d{1,2})/', $semester, $m)) {
-    $n = (int)$m[1];
-    $sfx = 'th'; if ($n % 100 < 11 || $n % 100 > 13) { $sfx = [1=>'st',2=>'nd',3=>'rd'][$n % 10] ?? 'th'; }
-    $normalized = $n . $sfx . ' Semester';
-  } else {
-    $normalized = $semester;
-  }
-}
 $fees = [];
-if ($course) {
-  // Pull all active fees for the course; filter by semester match if possible
-  $stmt = $conn->prepare("SELECT id, title, amount, due_date, is_active, semester FROM fee_structures WHERE course_name = ? AND is_active = 1 ORDER BY due_date IS NULL, due_date ASC, id DESC");
-  if ($stmt) { $stmt->bind_param('s', $course); $stmt->execute(); $res = $stmt->get_result(); $all = []; while($r=$res->fetch_assoc()){ $all[]=$r; } $stmt->close(); }
-  if (!empty($all)) {
-    if ($normalized) {
-      $num = null; if (preg_match('/(\d{1,2})/', $normalized, $m)) { $num = (int)$m[1]; }
-      foreach ($all as $r) {
-        // Try exact label first
-        if (strcasecmp($r['semester'], $normalized) === 0) { $fees[] = $r; continue; }
-        // Then numeric match like "6" in "6th Semester"
-        if ($num !== null && preg_match('/(\d{1,2})/', $r['semester'], $mm) && (int)$mm[1] === $num) { $fees[] = $r; }
-      }
-      if (empty($fees)) { $fees = $all; }
-    } else {
-      $fees = $all;
-    }
+if ($class_level) {
+  // Pull all active fees for the class level
+  $stmt = $conn->prepare("SELECT id, title, amount, due_date, is_active, class_level FROM fee_structures WHERE class_level = ? AND is_active = 1 ORDER BY due_date IS NULL, due_date ASC, id DESC");
+  if ($stmt) { 
+    $stmt->bind_param('s', $class_level); 
+    $stmt->execute(); 
+    $res = $stmt->get_result(); 
+    while($r = $res->fetch_assoc()){ 
+      $fees[] = $r; 
+    } 
+    $stmt->close(); 
   }
 }
 // Helper: ensure payments table has fee_id column (one-time lightweight migration)
@@ -135,7 +117,7 @@ if ($conn && isset($_SESSION['user_id'])) {
           </tbody>
         </table>
       <?php else: ?>
-        <div style="text-align:center; color:#64748b; padding: 24px;">No fees found for your course/semester.</div>
+        <div style="text-align:center; color:#64748b; padding: 24px;">No fees found for your class level.</div>
       <?php endif; ?>
       <div style="margin-top:16px;">
         <a class="btn btn-outline" href="../dashboard.php"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>

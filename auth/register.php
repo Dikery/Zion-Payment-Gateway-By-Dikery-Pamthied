@@ -2,12 +2,12 @@
 session_start();
 require '../includes/db_connect.php';
 
-// Load available courses for dropdown
-$courses = [];
-$cRes = $conn->query("SHOW TABLES LIKE 'courses'");
+// Load available classes for dropdown
+$classes = [];
+$cRes = $conn->query("SHOW TABLES LIKE 'classes'");
 if ($cRes && $cRes->num_rows > 0) {
-    $cList = $conn->query("SELECT name FROM courses WHERE is_active = 1 ORDER BY name");
-    if ($cList) { while ($r = $cList->fetch_assoc()) { $courses[] = $r['name']; } }
+    $cList = $conn->query("SELECT name FROM classes WHERE is_active = 1 ORDER BY name");
+    if ($cList) { while ($r = $cList->fetch_assoc()) { $classes[] = $r['name']; } }
 }
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
@@ -19,8 +19,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $last_name = trim($conn->real_escape_string($_POST['last_name']));
     $contact = trim($conn->real_escape_string($_POST['contact']));
     $student_id = trim($conn->real_escape_string($_POST['student_id']));
-    $course = trim($conn->real_escape_string($_POST['course']));
-    $semester = trim($conn->real_escape_string($_POST['semester']));
+    $class_level = trim($conn->real_escape_string($_POST['class_level']));
 
     $errors = [];
 
@@ -85,8 +84,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 $user_id = $conn->insert_id;
 
                 // Insert student details
-                $student_sql = "INSERT INTO student_details (user_id, student_id, course, semester)
-                               VALUES ('$user_id', '$student_id', '$course', '$semester')";
+                $student_sql = "INSERT INTO student_details (user_id, student_id, class_level)
+                               VALUES ('$user_id', '$student_id', '$class_level')";
 
                 if ($conn->query($student_sql) === TRUE) {
                     $conn->commit();
@@ -175,7 +174,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         <div class="left">
             <div class="brand"><div class="brand-icon"><i class="fas fa-graduation-cap"></i></div><div class="brand-name">Zion</div></div>
             <div class="title">Create your student account</div>
-            <div class="sub">Register to pay fees, track dues, and download receipts.</div>
+            <div class="sub">Register to pay school fees, track dues, and download receipts.</div>
 
         <?php if (!empty($errors)): ?>
             <div class="alert alert-error">
@@ -277,37 +276,29 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 </div>
             </div>
 
-            <div class="grid-2">
-                <div class="form-group">
-                    <label for="course">Course</label>
-                    <div class="input-container">
-                        <i class="fas fa-graduation-cap input-icon"></i>
-                        <select id="course" name="course" required>
-                            <option value="">Select Course</option>
-                            <?php if (!empty($courses)): ?>
-                                <?php foreach ($courses as $c): ?>
-                                    <option value="<?php echo htmlspecialchars($c); ?>" <?php echo (isset($_POST['course']) && $_POST['course'] == $c) ? 'selected' : ''; ?>><?php echo htmlspecialchars($c); ?></option>
-                                <?php endforeach; ?>
-                            <?php else: ?>
-                                <option value="Computer Science" <?php echo (isset($_POST['course']) && $_POST['course'] == 'Computer Science') ? 'selected' : ''; ?>>Computer Science</option>
-                                <option value="Information Technology" <?php echo (isset($_POST['course']) && $_POST['course'] == 'Information Technology') ? 'selected' : ''; ?>>Information Technology</option>
-                                <option value="Business Administration" <?php echo (isset($_POST['course']) && $_POST['course'] == 'Business Administration') ? 'selected' : ''; ?>>Business Administration</option>
-                                <option value="Engineering" <?php echo (isset($_POST['course']) && $_POST['course'] == 'Engineering') ? 'selected' : ''; ?>>Engineering</option>
-                                <option value="Arts" <?php echo (isset($_POST['course']) && $_POST['course'] == 'Arts') ? 'selected' : ''; ?>>Arts</option>
-                                <option value="Science" <?php echo (isset($_POST['course']) && $_POST['course'] == 'Science') ? 'selected' : ''; ?>>Science</option>
-                            <?php endif; ?>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label for="semester">Semester</label>
-                    <div class="input-container">
-                        <i class="fas fa-calendar input-icon"></i>
-                        <select id="semester" name="semester" required>
-                            <option value="">Select Semester</option>
-                        </select>
-                    </div>
+            <div class="form-group">
+                <label for="class_level">Class</label>
+                <div class="input-container">
+                    <i class="fas fa-graduation-cap input-icon"></i>
+                    <select id="class_level" name="class_level" required>
+                        <option value="">Select Class</option>
+                        <?php if (!empty($classes)): ?>
+                            <?php foreach ($classes as $c): ?>
+                                <option value="<?php echo htmlspecialchars($c); ?>" <?php echo (isset($_POST['class_level']) && $_POST['class_level'] == $c) ? 'selected' : ''; ?>><?php echo htmlspecialchars($c); ?></option>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <option value="Class 1" <?php echo (isset($_POST['class_level']) && $_POST['class_level'] == 'Class 1') ? 'selected' : ''; ?>>Class 1</option>
+                            <option value="Class 2" <?php echo (isset($_POST['class_level']) && $_POST['class_level'] == 'Class 2') ? 'selected' : ''; ?>>Class 2</option>
+                            <option value="Class 3" <?php echo (isset($_POST['class_level']) && $_POST['class_level'] == 'Class 3') ? 'selected' : ''; ?>>Class 3</option>
+                            <option value="Class 4" <?php echo (isset($_POST['class_level']) && $_POST['class_level'] == 'Class 4') ? 'selected' : ''; ?>>Class 4</option>
+                            <option value="Class 5" <?php echo (isset($_POST['class_level']) && $_POST['class_level'] == 'Class 5') ? 'selected' : ''; ?>>Class 5</option>
+                            <option value="Class 6" <?php echo (isset($_POST['class_level']) && $_POST['class_level'] == 'Class 6') ? 'selected' : ''; ?>>Class 6</option>
+                            <option value="Class 7" <?php echo (isset($_POST['class_level']) && $_POST['class_level'] == 'Class 7') ? 'selected' : ''; ?>>Class 7</option>
+                            <option value="Class 8" <?php echo (isset($_POST['class_level']) && $_POST['class_level'] == 'Class 8') ? 'selected' : ''; ?>>Class 8</option>
+                            <option value="Class 9" <?php echo (isset($_POST['class_level']) && $_POST['class_level'] == 'Class 9') ? 'selected' : ''; ?>>Class 9</option>
+                            <option value="Class 10" <?php echo (isset($_POST['class_level']) && $_POST['class_level'] == 'Class 10') ? 'selected' : ''; ?>>Class 10</option>
+                        <?php endif; ?>
+                    </select>
                 </div>
             </div>
 
@@ -335,7 +326,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             <ul class="bullets">
                 <li><i class="fas fa-check-circle"></i> Quick registration</li>
                 <li><i class="fas fa-check-circle"></i> Real-time payment history</li>
-                <li><i class="fas fa-check-circle"></i> Smart semester mapping</li>
+                <li><i class="fas fa-check-circle"></i> Class-based fee management</li>
             </ul>
         </div>
     </div>
@@ -393,32 +384,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 }, 1500);
             });
 
-            // Populate semesters dynamically when course changes
-            const courseSelect = document.getElementById('course');
-            const semesterSelect = document.getElementById('semester');
-            function ordinal(n){ const s=["th","st","nd","rd"], v=n%100; return n+(s[(v-20)%10]||s[v]||s[0]); }
-            async function loadSemesters(){
-                const c = courseSelect.value.trim();
-                semesterSelect.innerHTML = '<option value="">Select Semester</option>';
-                if(!c) return;
-                try{
-                    const r = await fetch('../auth/get_course_semesters.php?course=' + encodeURIComponent(c), { credentials: 'same-origin' });
-                    const data = await r.json();
-                    if(data && data.success){
-                        for(let i=1;i<=data.num_semesters;i++){
-                            const label = ordinal(i) + ' Semester';
-                            const opt = document.createElement('option');
-                            opt.value = label;
-                            opt.textContent = label;
-                            semesterSelect.appendChild(opt);
-                        }
-                    }
-                }catch(e){ /* ignore */ }
-            }
-            courseSelect.addEventListener('change', loadSemesters);
-
-            // Prefill semesters if a course was already selected (postback)
-            if (courseSelect.value) { loadSemesters(); }
+            // Class selection is now simple dropdown - no dynamic loading needed
 
             // Entrance animation
             const layout = document.querySelector('.layout');

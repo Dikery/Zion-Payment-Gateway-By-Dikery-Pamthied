@@ -353,8 +353,7 @@ if (!isset($_SESSION['username'])) {
       }
       if (isset($_SESSION['user_id'])) {
         require_once 'includes/db_connect.php';
-        $course = $_SESSION['course'] ?? null;
-        $semester = $_SESSION['semester'] ?? null;
+        $class_level = $_SESSION['class_level'] ?? null;
         if ($feeId) {
           // If a specific fee is selected, load its details
           $stmt = $conn->prepare("SELECT amount, due_date FROM fee_structures WHERE id = ? AND is_active = 1 LIMIT 1");
@@ -365,10 +364,10 @@ if (!isset($_SESSION['username'])) {
             if ($row = $res->fetch_assoc()) { if ($appAmount === null) { $appAmount = (float)$row['amount']; } if ($appDue === null) { $appDue = $row['due_date']; } }
             $stmt->close();
           }
-        } elseif ($course && $semester && $appAmount === null) {
-          $stmt = $conn->prepare("SELECT id, amount, due_date FROM fee_structures WHERE course_name = ? AND semester = ? AND is_active = 1 ORDER BY due_date IS NULL, due_date ASC, id DESC LIMIT 1");
+        } elseif ($class_level && $appAmount === null) {
+          $stmt = $conn->prepare("SELECT id, amount, due_date FROM fee_structures WHERE class_level = ? AND is_active = 1 ORDER BY due_date IS NULL, due_date ASC, id DESC LIMIT 1");
           if ($stmt) {
-            $stmt->bind_param('ss', $course, $semester);
+            $stmt->bind_param('s', $class_level);
             $stmt->execute();
             $res = $stmt->get_result();
             if ($row = $res->fetch_assoc()) { if (!$feeId) { $feeId = (int)$row['id']; } if ($appAmount === null) { $appAmount = (float)$row['amount']; } if ($appDue === null) { $appDue = $row['due_date']; } }

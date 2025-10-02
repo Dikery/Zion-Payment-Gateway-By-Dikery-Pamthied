@@ -13,7 +13,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     } else {
         // Check users table for authentication
         $sql = "SELECT u.id, u.username, u.password, u.first_name, u.last_name, u.user_type, u.email,
-                       sd.student_id, sd.course, sd.semester, sd.fee_amount, sd.outstanding_amount
+                       sd.student_id, sd.class_level, sd.fee_amount, sd.outstanding_amount
                 FROM users u
                 LEFT JOIN student_details sd ON u.id = sd.user_id
                 WHERE u.username = '$username' OR u.email = '$username'";
@@ -35,8 +35,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 // Set student-specific session variables if user is a student
                 if ($user['user_type'] === 'student') {
                     $_SESSION['student_id'] = $user['student_id'];
-                    $_SESSION['course'] = $user['course'];
-                    $_SESSION['semester'] = $user['semester'];
+                    $_SESSION['class_level'] = $user['class_level'];
                     $_SESSION['fee_amount'] = $user['fee_amount'] ?? 0.00;
                     $_SESSION['outstanding_amount'] = $user['outstanding_amount'] ?? 0.00;
                 }

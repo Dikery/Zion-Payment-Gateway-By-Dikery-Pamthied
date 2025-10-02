@@ -11,8 +11,7 @@ require '../includes/db_connect.php';
 
 // Filters (GET)
 $filter_search = isset($_GET['q']) ? trim($_GET['q']) : '';
-$filter_course = isset($_GET['course']) ? trim($_GET['course']) : '';
-$filter_semester = isset($_GET['semester']) ? trim($_GET['semester']) : '';
+$filter_class = isset($_GET['class']) ? trim($_GET['class']) : '';
 $filter_type = isset($_GET['type']) ? trim($_GET['type']) : '';
 
 // Handle user actions
@@ -24,7 +23,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         header('Content-Type: application/json');
         $user_id = intval($_POST['user_id']);
         $stmt = $conn->prepare("SELECT u.id, u.username, u.email, u.first_name, u.last_name, u.contact, u.user_type,
-                                       sd.student_id, sd.course, sd.semester
+                                       sd.student_id, sd.class_level
                                 FROM users u
                                 LEFT JOIN student_details sd ON sd.user_id = u.id
                                 WHERE u.id = ?");
@@ -50,8 +49,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $contact = trim($_POST['contact'] ?? '');
         $user_type = trim($_POST['user_type'] ?? 'student');
         $student_id_u = trim($_POST['student_id'] ?? '');
-        $course = trim($_POST['course'] ?? '');
-        $semester = trim($_POST['semester'] ?? '');
+        $class_level = trim($_POST['class_level'] ?? '');
 
         if ($user_id <= 0 || $first_name === '' || $last_name === '' || $email === '') {
             echo json_encode(['success'=>false,'message'=>'Missing required fields']);
@@ -69,15 +67,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             // Ensure student_details row exists for students
             if ($user_type === 'student') {
                 // Try update first
-                $sd_stmt = $conn->prepare("UPDATE student_details SET student_id=?, course=?, semester=? WHERE user_id=?");
+                $sd_stmt = $conn->prepare("UPDATE student_details SET student_id=?, class_level=? WHERE user_id=?");
                 if (!$sd_stmt) { throw new Exception('Failed to prepare student_details update'); }
-                $sd_stmt->bind_param('sssi', $student_id_u, $course, $semester, $user_id);
+                $sd_stmt->bind_param('ssi', $student_id_u, $class_level, $user_id);
                 $sd_stmt->execute();
                 if ($sd_stmt->affected_rows === 0) {
                     $sd_stmt->close();
-                    $ins_stmt = $conn->prepare("INSERT INTO student_details (user_id, student_id, course, semester) VALUES (?,?,?,?)");
+                    $ins_stmt = $conn->prepare("INSERT INTO student_details (user_id, student_id, class_level) VALUES (?,?,?)");
                     if (!$ins_stmt) { throw new Exception('Failed to prepare student_details insert'); }
-                    $ins_stmt->bind_param('isss', $user_id, $student_id_u, $course, $semester);
+                    $ins_stmt->bind_param('iss', $user_id, $student_id_u, $class_level);
                     $ins_stmt->execute();
                     $ins_stmt->close();
                 } else {
@@ -90,6 +88,71 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         } catch (Throwable $e) {
             $conn->rollback();
             echo json_encode(['success'=>false,'message'=>'Update failed']);
+        }
+        exit();
+    }
+
+    // AJAX: Add new user
+    if ($action === 'add_user' && ($_POST['ajax'] ?? '') === '1') {
+        header('Content-Type: application/json');
+        $username = trim($_POST['username'] ?? '');
+        $email = trim($_POST['email'] ?? '');
+        $password = trim($_POST['password'] ?? '');
+        $first_name = trim($_POST['first_name'] ?? '');
+        $last_name = trim($_POST['last_name'] ?? '');
+        $contact = trim($_POST['contact'] ?? '');
+        $user_type = trim($_POST['user_type'] ?? 'student');
+        $student_id_u = trim($_POST['student_id'] ?? '');
+        $class_level = trim($_POST['class_level'] ?? '');
+
+        if ($username === '' || $email === '' || $password === '' || $first_name === '' || $last_name === '') {
+            echo json_encode(['success'=>false,'message'=>'All required fields must be filled']);
+            exit();
+        }
+
+        if (strlen($password) < 6) {
+            echo json_encode(['success'=>false,'message'=>'Password must be at least 6 characters']);
+            exit();
+        }
+
+        $conn->begin_transaction();
+        try {
+            // Check if username or email already exists
+            $check_stmt = $conn->prepare("SELECT id FROM users WHERE username = ? OR email = ?");
+            if (!$check_stmt) { throw new Exception('Failed to prepare check statement'); }
+            $check_stmt->bind_param('ss', $username, $email);
+            $check_stmt->execute();
+            if ($check_stmt->get_result()->num_rows > 0) {
+                $check_stmt->close();
+                throw new Exception('Username or email already exists');
+            }
+            $check_stmt->close();
+
+            // Hash password
+            $hashed_password = password_hash($password, PASSWORD_DEFAULT);
+
+            // Insert user
+            $u_stmt = $conn->prepare("INSERT INTO users (username, email, password, first_name, last_name, contact, user_type) VALUES (?, ?, ?, ?, ?, ?, ?)");
+            if (!$u_stmt) { throw new Exception('Failed to prepare user insert'); }
+            $u_stmt->bind_param('sssssss', $username, $email, $hashed_password, $first_name, $last_name, $contact, $user_type);
+            $u_stmt->execute();
+            $new_user_id = $conn->insert_id;
+            $u_stmt->close();
+
+            // Insert student details if user is a student
+            if ($user_type === 'student' && $student_id_u !== '') {
+                $sd_stmt = $conn->prepare("INSERT INTO student_details (user_id, student_id, class_level) VALUES (?, ?, ?)");
+                if (!$sd_stmt) { throw new Exception('Failed to prepare student_details insert'); }
+                $sd_stmt->bind_param('iss', $new_user_id, $student_id_u, $class_level);
+                $sd_stmt->execute();
+                $sd_stmt->close();
+            }
+
+            $conn->commit();
+            echo json_encode(['success'=>true,'message'=>'User created successfully']);
+        } catch (Throwable $e) {
+            $conn->rollback();
+            echo json_encode(['success'=>false,'message'=>$e->getMessage()]);
         }
         exit();
     }
@@ -118,7 +181,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 // Build filtered users query with prepared statement
 $base_sql = "SELECT u.id, u.username, u.email, u.first_name, u.last_name, u.contact,
                     u.created_at, u.user_type, u.last_payment_date, u.total_paid,
-                    sd.student_id, sd.course, sd.semester
+                    sd.student_id, sd.class_level
              FROM users u
              LEFT JOIN student_details sd ON u.id = sd.user_id";
 
@@ -133,16 +196,10 @@ if ($filter_search !== '') {
     $params[] = $searchLike; $params[] = $searchLike; $params[] = $searchLike;
 }
 
-if ($filter_course !== '') {
-    $conditions[] = "sd.course = ?";
+if ($filter_class !== '') {
+    $conditions[] = "sd.class_level = ?";
     $types .= 's';
-    $params[] = $filter_course;
-}
-
-if ($filter_semester !== '') {
-    $conditions[] = "sd.semester = ?";
-    $types .= 's';
-    $params[] = $filter_semester;
+    $params[] = $filter_class;
 }
 
 if ($filter_type !== '') {
@@ -180,12 +237,9 @@ $stats_result = $conn->query($stats_sql);
 $stats = $stats_result->fetch_assoc();
 
 // Distinct options for filters
-$courses_options = [];
-$semesters_options = [];
-$course_res = $conn->query("SELECT DISTINCT course FROM student_details WHERE course IS NOT NULL AND course <> '' ORDER BY course");
-if ($course_res) { while ($r = $course_res->fetch_assoc()) { $courses_options[] = $r['course']; } }
-$sem_res = $conn->query("SELECT DISTINCT semester FROM student_details WHERE semester IS NOT NULL AND semester <> '' ORDER BY semester");
-if ($sem_res) { while ($r = $sem_res->fetch_assoc()) { $semesters_options[] = $r['semester']; } }
+$class_options = [];
+$class_res = $conn->query("SELECT DISTINCT class_level FROM student_details WHERE class_level IS NOT NULL AND class_level <> '' ORDER BY class_level");
+if ($class_res) { while ($r = $class_res->fetch_assoc()) { $class_options[] = $r['class_level']; } }
 ?>
 
 <!DOCTYPE html>
@@ -735,10 +789,10 @@ body {
                         <i class="fas fa-users"></i>
                         All Users
                     </div>
-                    <a href="#" class="add-user-btn">
+                    <button class="add-user-btn" onclick="openAddUserPanel()">
                         <i class="fas fa-user-plus"></i>
                         Add New User
-                    </a>
+                    </button>
                 </div>
 
                 <div class="search-filter-section">
@@ -749,20 +803,11 @@ body {
                                 <input type="text" class="search-input" name="q" placeholder="Search by name, email, or student ID" value="<?php echo htmlspecialchars($filter_search); ?>">
                             </div>
                             <div class="search-group">
-                                <label class="search-label">Filter by Course</label>
-                                <select class="search-input" name="course">
-                                    <option value="">All Courses</option>
-                                    <?php foreach ($courses_options as $c): ?>
-                                        <option value="<?php echo htmlspecialchars($c); ?>" <?php echo ($filter_course === $c) ? 'selected' : ''; ?>><?php echo htmlspecialchars($c); ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                            <div class="search-group">
-                                <label class="search-label">Filter by Semester</label>
-                                <select class="search-input" name="semester">
-                                    <option value="">All Semesters</option>
-                                    <?php foreach ($semesters_options as $s): ?>
-                                        <option value="<?php echo htmlspecialchars($s); ?>" <?php echo ($filter_semester === $s) ? 'selected' : ''; ?>><?php echo htmlspecialchars($s); ?></option>
+                                <label class="search-label">Filter by Class</label>
+                                <select class="search-input" name="class">
+                                    <option value="">All Classes</option>
+                                    <?php foreach ($class_options as $c): ?>
+                                        <option value="<?php echo htmlspecialchars($c); ?>" <?php echo ($filter_class === $c) ? 'selected' : ''; ?>><?php echo htmlspecialchars($c); ?></option>
                                     <?php endforeach; ?>
                                 </select>
                             </div>
@@ -809,8 +854,7 @@ body {
                                     </td>
                                     <td>
                                         <div><strong>Student ID:</strong> <?php echo htmlspecialchars($user['student_id'] ?? 'N/A'); ?></div>
-                                        <div><strong>Course:</strong> <?php echo htmlspecialchars($user['course'] ?? 'N/A'); ?></div>
-                                        <div><strong>Semester:</strong> <?php echo htmlspecialchars($user['semester'] ?? 'N/A'); ?></div>
+                                        <div><strong>Class:</strong> <?php echo htmlspecialchars($user['class_level'] ?? 'N/A'); ?></div>
                                     </td>
                                     <td>
                                         <div><strong>Total Paid:</strong> ₹<?php echo number_format($user['total_paid'] ?? 0, 2); ?></div>
@@ -894,18 +938,96 @@ body {
                         <input type="text" class="form-control" name="student_id" id="edit_student_id" />
                     </div>
                     <div class="form-group">
-                        <label>Course</label>
-                        <input type="text" class="form-control" name="course" id="edit_course" />
-                    </div>
-                    <div class="form-group">
-                        <label>Semester</label>
-                        <input type="text" class="form-control" name="semester" id="edit_semester" />
+                        <label>Class Level</label>
+                        <select class="form-control" name="class_level" id="edit_class_level">
+                            <option value="">Select Class</option>
+                            <option value="Class 1">Class 1</option>
+                            <option value="Class 2">Class 2</option>
+                            <option value="Class 3">Class 3</option>
+                            <option value="Class 4">Class 4</option>
+                            <option value="Class 5">Class 5</option>
+                            <option value="Class 6">Class 6</option>
+                            <option value="Class 7">Class 7</option>
+                            <option value="Class 8">Class 8</option>
+                            <option value="Class 9">Class 9</option>
+                            <option value="Class 10">Class 10</option>
+                        </select>
                     </div>
                 </form>
             </div>
             <div class="form-actions">
                 <button class="btn secondary" id="btnCancelEdit" type="button">Cancel</button>
                 <button class="btn primary" id="btnSaveEdit" type="button">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add User Panel UI -->
+    <div class="edit-overlay" id="addUserOverlay" aria-hidden="true">
+        <div class="edit-panel" role="dialog" aria-modal="true">
+            <div class="edit-header">
+                <div class="edit-title">Add New User</div>
+                <button class="btn" id="btnCloseAdd">Close</button>
+            </div>
+            <div class="edit-body">
+                <form id="addUserForm">
+                    <div class="form-group">
+                        <label>Username *</label>
+                        <input type="text" class="form-control" name="username" id="add_username" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Email *</label>
+                        <input type="email" class="form-control" name="email" id="add_email" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Password *</label>
+                        <input type="password" class="form-control" name="password" id="add_password" required minlength="6" />
+                        <small style="color: #64748b; font-size: 12px;">Minimum 6 characters</small>
+                    </div>
+                    <div class="form-group">
+                        <label>First Name *</label>
+                        <input type="text" class="form-control" name="first_name" id="add_first_name" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Last Name *</label>
+                        <input type="text" class="form-control" name="last_name" id="add_last_name" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Contact</label>
+                        <input type="text" class="form-control" name="contact" id="add_contact" />
+                    </div>
+                    <div class="form-group">
+                        <label>User Type</label>
+                        <select class="form-control" name="user_type" id="add_user_type" onchange="toggleStudentFields()">
+                            <option value="student">Student</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="student_fields">
+                        <label>Student ID</label>
+                        <input type="text" class="form-control" name="student_id" id="add_student_id" />
+                    </div>
+                    <div class="form-group" id="class_fields">
+                        <label>Class Level</label>
+                        <select class="form-control" name="class_level" id="add_class_level">
+                            <option value="">Select Class</option>
+                            <option value="Class 1">Class 1</option>
+                            <option value="Class 2">Class 2</option>
+                            <option value="Class 3">Class 3</option>
+                            <option value="Class 4">Class 4</option>
+                            <option value="Class 5">Class 5</option>
+                            <option value="Class 6">Class 6</option>
+                            <option value="Class 7">Class 7</option>
+                            <option value="Class 8">Class 8</option>
+                            <option value="Class 9">Class 9</option>
+                            <option value="Class 10">Class 10</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="form-actions">
+                <button class="btn secondary" id="btnCancelAdd" type="button">Cancel</button>
+                <button class="btn primary" id="btnSaveAdd" type="button">Create User</button>
             </div>
         </div>
     </div>
@@ -981,8 +1103,7 @@ body {
             contact: document.getElementById('edit_contact'),
             user_type: document.getElementById('edit_user_type'),
             student_id: document.getElementById('edit_student_id'),
-            course: document.getElementById('edit_course'),
-            semester: document.getElementById('edit_semester')
+            class_level: document.getElementById('edit_class_level')
         };
 
         window.openEditPanel = async function(userId){
@@ -1005,8 +1126,7 @@ body {
                     fields.contact.value = u.contact || '';
                     fields.user_type.value = u.user_type || 'student';
                     fields.student_id.value = u.student_id || '';
-                    fields.course.value = u.course || '';
-                    fields.semester.value = u.semester || '';
+                    fields.class_level.value = u.class_level || '';
                 }
             } catch(e) {}
         }
@@ -1039,8 +1159,7 @@ body {
                             typeBadge.className = `user-type type-${fields.user_type.value}`;
                         }
                         row.cells[1].children[0].innerHTML = `<strong>Student ID:</strong> ${fields.student_id.value || 'N/A'}`;
-                        row.cells[1].children[1].innerHTML = `<strong>Course:</strong> ${fields.course.value || 'N/A'}`;
-                        row.cells[1].children[2].innerHTML = `<strong>Semester:</strong> ${fields.semester.value || 'N/A'}`;
+                        row.cells[1].children[1].innerHTML = `<strong>Class:</strong> ${fields.class_level.value || 'N/A'}`;
                     }
                     closeEditPanel();
                 } else {
@@ -1050,6 +1169,83 @@ body {
                 alert('Failed to update user');
             }
         });
+
+        // Add User Panel Logic
+        const addOverlay = document.getElementById('addUserOverlay');
+        const btnCloseAdd = document.getElementById('btnCloseAdd');
+        const btnCancelAdd = document.getElementById('btnCancelAdd');
+        const btnSaveAdd = document.getElementById('btnSaveAdd');
+        const addForm = document.getElementById('addUserForm');
+
+        window.openAddUserPanel = function(){
+            addOverlay.classList.add('open');
+            addOverlay.setAttribute('aria-hidden','false');
+            // Clear form
+            addForm.reset();
+            // Focus first input
+            document.getElementById('add_username').focus();
+        }
+
+        function closeAddPanel(){
+            addOverlay.classList.remove('open');
+            addOverlay.setAttribute('aria-hidden','true');
+        }
+
+        btnCloseAdd.addEventListener('click', closeAddPanel);
+        btnCancelAdd.addEventListener('click', closeAddPanel);
+
+        btnSaveAdd.addEventListener('click', async function(){
+            const formData = new FormData(addForm);
+            formData.append('action','add_user');
+            formData.append('ajax','1');
+
+            // Basic client-side validation
+            const username = document.getElementById('add_username').value.trim();
+            const email = document.getElementById('add_email').value.trim();
+            const password = document.getElementById('add_password').value;
+            const firstName = document.getElementById('add_first_name').value.trim();
+            const lastName = document.getElementById('add_last_name').value.trim();
+
+            if (!username || !email || !password || !firstName || !lastName) {
+                alert('Please fill in all required fields');
+                return;
+            }
+
+            if (password.length < 6) {
+                alert('Password must be at least 6 characters');
+                return;
+            }
+
+            try {
+                const res = await fetch('manage_users.php', { method:'POST', body: formData });
+                const data = await res.json();
+                if (data && data.success) {
+                    alert('User created successfully!');
+                    closeAddPanel();
+                    // Reload page to show new user
+                    window.location.reload();
+                } else {
+                    alert(data && data.message ? data.message : 'Failed to create user');
+                }
+            } catch(e) {
+                alert('Failed to create user: ' + e.message);
+            }
+        });
+
+        // Toggle student fields based on user type
+        window.toggleStudentFields = function(){
+            const userType = document.getElementById('add_user_type').value;
+            const studentFields = document.getElementById('student_fields');
+            const classFields = document.getElementById('class_fields');
+            
+            if (userType === 'student') {
+                studentFields.style.display = 'block';
+                classFields.style.display = 'block';
+            } else {
+                studentFields.style.display = 'none';
+                classFields.style.display = 'none';
+            }
+        }
         
     </script>
 </body>
